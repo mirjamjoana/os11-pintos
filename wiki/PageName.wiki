@@ -1,0 +1,33 @@
+#summary One-sentence summary of this page.
+
+= Planning =
+
+*threads/thread.c 
+threads/thread.h*
+
+- Variablen: Vater/Kindbeziehung, Locks etc. -- TOGETHER
+
+
+*userprog/exception.*
+????? - brauchen wir wahrscheinlich net
+
+
+*userprog/process.c*
+
+_- change process_wait() to an infinite loop -- Mirjam_
+
+- Process Termination Messages -- Tobi
+- Argument Passing -- Mirjam
+
+
+*userprog/syscall.c
+userprog/syscall.h*
+
+_- Accessing User Memory -- Mirjam
+- System call infrastructure -- Tobi
+- exit system call -- Mirjam
+- write system call -- Tobi_
+
+- System calls : wait() -- Tobi
+- System calls : Rest -- Mirjam
+- Deny writes to Executables -- Tobi
