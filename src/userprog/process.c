@@ -50,6 +50,14 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+   /*char s[] = *file_name_;
+   char *token, *save_ptr;
+
+   for (token = strtok_r (s, " ", &save_ptr); token != NULL;
+        token = strtok_r (NULL, " ", &save_ptr))
+     printf ("'%s'\n", token);
+*/
+
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
