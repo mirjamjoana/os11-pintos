@@ -16,7 +16,9 @@ threads/thread.h*
 
 - change process_wait() to an infinite loop -- Mirjam
 
+
 - Process Termination Messages -- Tobi
+
 - Argument Passing -- Mirjam
 
 
@@ -24,10 +26,16 @@ threads/thread.h*
 userprog/syscall.h*
 
 - Accessing User Memory -- Mirjam
+
 - System call infrastructure -- Tobi
+
 - exit system call -- Mirjam
+
 - write system call -- Tobi
 
+
 - System calls : wait() -- Tobi
+
 - System calls : Rest -- Mirjam
+
 - Deny writes to Executables -- Tobi
