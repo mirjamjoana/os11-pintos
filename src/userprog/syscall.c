@@ -18,3 +18,13 @@ syscall_handler (struct intr_frame *f UNUSED)
   printf ("system call!\n");
   thread_exit ();
 }
+
+/* checks the validity of a user pointer 
+Returns the byte value if successful, -1 if UADDR points to
+not accessible memory.*/
+static int
+syscall_check_pointer (const uint8_t *uaddr)
+{
+  // TODO
+  return 0;
+}
