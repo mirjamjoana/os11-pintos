@@ -14,7 +14,7 @@ threads/thread.h*
 
 *userprog/process.c*
 
-- change process_wait() to an infinite loop -- Mirjam
+_- change process_wait() to an infinite loop -- Mirjam_
 
 
 - Process Termination Messages -- Tobi
@@ -25,13 +25,13 @@ threads/thread.h*
 *userprog/syscall.c
 userprog/syscall.h*
 
-- Accessing User Memory -- Mirjam
+_- Accessing User Memory -- Mirjam_
 
-- System call infrastructure -- Tobi
+_- System call infrastructure -- Tobi_
 
-- exit system call -- Mirjam
+_- exit system call -- Mirjam_
 
-- write system call -- Tobi
+_- write system call -- Tobi_
 
 
 - System calls : wait() -- Tobi
