@@ -5,7 +5,39 @@
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
 
+
 static void syscall_handler (struct intr_frame *);
+
+void handle(int syscall);
+void handle_halt(void);
+void handle_exit(void);
+void handle_exec(void);
+void handle_wait(void);
+void handle_create(void);
+void handle_remove(void);
+void handle_open(void);
+void handle_filesize(void);
+void handle_read(void);
+void handle_write(void);
+void handle_seek(void);
+void handle_tell(void);
+void handle_close(void);
+void handle_no_such_syscall(void);
+
+void halt (void);
+void exit (int status);
+int exec (const char *cmd_line);
+int wait (int pid);
+bool create (const char *file, unsigned initial_size);
+bool remove (const char *file);
+int open (const char *file);
+int filesize (int fd);
+int read (int fd, void *buffer, unsigned size);
+int write (int fd, const void *buffer, unsigned size);
+void seek (int fd, unsigned position);
+unsigned tell (int fd);
+void close (int fd);
+
 
 void
 syscall_init (void) 
@@ -19,122 +51,113 @@ syscall_handler (struct intr_frame *f UNUSED)
 	printf ("system call!\n");
 
 	/* retrieve system call number */
-	int current_syscall = get_system_call();
+	// get system call number from user space
+	// match system call number to syscall enum
+	int syscall = SYS_HALT;
 
 	/* handle syscall with its prodecure */
-	handle(current_syscall, args);
+	handle(syscall);
 }
 
-/* get current syscall */
-static int
-get_system_call()
-{
-	// get system call number from user space
-	
-	// match system call number to syscall enum
-
-	// FIXME
-	return SYSCALL_ERROR;
-}
 
 /* invoke corresponding syscall prodecure */
-static void 
-handle(syscall sc, char* args)
+void 
+handle(int syscall)
 {
-	switch(sc)
+	switch(syscall)
 	{
 		case SYS_HALT:
-			handle_halt(args);
+			handle_halt();
 			break;
 
 		case SYS_EXIT:
-			handle_exit(args);
+			handle_exit();
 			break;
 
 		case SYS_EXEC:
-			handle_exec(args);
+			handle_exec();
 			break;
 
 		case SYS_WAIT:
-			handle_wait(args);
+			handle_wait();
 			break;
 
 		/* file system calls */
 		case SYS_CREATE:
-			handle_create(args);
+			handle_create();
 			break;
  
 		case SYS_REMOVE:
-			handle_remove(args);
+			handle_remove();
 			break;
 
 		case SYS_OPEN:
-			handle_open(args);
+			handle_open();
 			break;
 
 		case SYS_FILESIZE:
-			handle_filesize(args);
+			handle_filesize();
 			break;
 
 		case SYS_READ:
-			handle_read(args);
+			handle_read();
 			break;
 
 		case SYS_WRITE:
-			handle_write(args);
+			handle_write();
 			break;
 
 		case SYS_SEEK:
-			handle_seek(args);
+			handle_seek();
 			break;
 
 		case SYS_TELL:
-			handle_tell(args);
+			handle_tell();
 			break;
 
 		case SYS_CLOSE:
-			handle_close(args);
+			handle_close();
 			break;
 
 		default: /* SYSCALL_ERROR: */
-			handle_no_such_syscall(args);
+			handle_no_such_syscall();
 			break;
 	}
 }
 
-void handle_halt(char* args)  {}
+void handle_halt()  {}
 
-void handle_exit(char* args)  {}
+void handle_exit()  {}
 
-void handle_exec(char* args)  {
-	char* cmd_line = NULL;
-	pid_t pid = exec (cmd_line);
+void handle_exec()  {
+	//char* cmd_line = NULL;
+	//struct pid_t pid = exec(cmd_line);
 }
 	
-void handle_wait(char* args)  {
-	pid_t pid = NULL;
-	int exit_value = wait (pid);
+void handle_wait()  {
+	//struct pid_t pid;
+	//int exit_value = wait (pid);
 }
 	
-void handle_create(char* args) {}
+void handle_create() {}
 	
-void handle_remove(char* args)  {}
+void handle_remove()  {}
 	
-void handle_open(char* args) {}
+void handle_open() {}
 
-void handle_filesize(char* args)  {}
+void handle_filesize()  {}
 	
-void handle_read(char* args) {}
+void handle_read() {}
 	
-void handle_write(char* args) {}
+void handle_write() {}
 	
-void handle_seek(char* args) {}
+void handle_seek() {}
 	
-void handle_tell(char* args) {}
+void handle_tell() {}
 	
-void handle_close(char* args) {}
+void handle_close() {}
 	
-void handle_no_such_syscall(char* args) {
+void handle_no_such_syscall() {
 	printf("No such system call.\n");
 	thread_exit();
 }
@@ -148,12 +171,12 @@ void exit (int status) {
 //FIXME
 }
 
-pid_t exec (const char *cmd_line) {
+int exec (const char *cmd_line) {
 //FIXME
-	return (pid_t) 0;
+	return 0;
 }
 
-int wait (pid_t pid) {
+int wait (int pid) {
 //FIXME
 	return 0;
 }
@@ -208,8 +231,8 @@ void close (int fd) {
 }
 
 /* get the one argument from user space */
-static void 
-get_argument(const uint8_t *uaddr, int* arg)
+void 
+get_argument(const struct uint8_t *uaddr, int* arg)
 {
 	uint32_t address = syscall_check_pointer (uaddr);
 	
@@ -226,12 +249,12 @@ get_argument(const uint8_t *uaddr, int* arg)
 /* checks the validity of a user pointer 
 Returns the byte value if successful, -1 if UADDR points to
 not accessible memory.*/
-static int
-syscall_check_pointer (const uint8_t *uaddr)
+int
+syscall_check_pointer (const struct uint8_t *uaddr)
 {
   // TODO
   struct thread *cur = thread_current (); /* userspace? */
-  uint32_t *pd;
+  struct uint32_t *pd;
   pd = cur->pagedir;
 
   // Checks whether UADDR is a nullpointer
@@ -246,6 +269,6 @@ syscall_check_pointer (const uint8_t *uaddr)
 	return -1;
     }
   else
-	return pagedir_get_page(*pd, *uaddr);
+	return pagedir_get_page(pd, uaddr);
 }
 
