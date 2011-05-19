@@ -5,6 +5,8 @@
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
 
+#define MAX_CONSOLE_BUFFER 200
+
 static void syscall_handler (struct intr_frame *);
 
 void handle_halt(struct intr_frame *f);
@@ -43,7 +45,7 @@ void close (int fd);
 void
 syscall_init (void) 
 {
-  intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
 static void
@@ -118,7 +120,14 @@ syscall_handler (struct intr_frame *f)
 
 void handle_halt(struct intr_frame *f UNUSED)  {}
 
-void handle_exit(struct intr_frame *f UNUSED)  {}
+void handle_exit(struct intr_frame *f UNUSED)  {
+	/* fetch current status of the user process */
+	int status;
+	syscall_get_arguments(f, 1, &status);
+	
+	/* call exit */
+	exit(status);
+}
 
 void handle_exec(struct intr_frame *f UNUSED)  {
 	//char* cmd_line = NULL;
@@ -140,7 +149,9 @@ void handle_filesize(struct intr_frame *f UNUSED)  {}
 	
 void handle_read(struct intr_frame *f UNUSED) {}
 	
-void handle_write(struct intr_frame *f UNUSED) {}
+void handle_write(struct intr_frame *f UNUSED) {
+	
+}
 	
 void handle_seek(struct intr_frame *f UNUSED) {}
 	
@@ -149,16 +160,16 @@ void handle_tell(struct intr_frame *f UNUSED) {}
 void handle_close(struct intr_frame *f UNUSED) {}
 	
 void handle_no_such_syscall(struct intr_frame *f UNUSED) {
-	printf("No such system call.\n");
+	unsigned int syscall_number = *( (unsigned int*) f->esp);
+	printf("No such system call: %i.\n", syscall_number);
 	thread_exit();
 }
 	
-
 void halt (void) {
 //FIXME
 }
 
-// returns 0 if successful, -1 otherwise
+
 void exit (int status UNUSED) {
 	//FIXME
 	struct thread *cur = thread_current (); /* userspace? */
@@ -215,9 +226,27 @@ int read (int fd UNUSED, void *buffer UNUSED, unsigned size UNUSED) {
 	return 0;
 }
 
-int write (int fd UNUSED, const void *buffer UNUSED, unsigned size UNUSED) {
-	//FIXME
-	return 0;
+int write (int fd, const void *buffer, unsigned size) {
+	/* local variables */
+	int writing_count = 0;
+
+	switch(fd) 
+	{
+		case 1: /* console */
+			if(size > MAX_CONSOLE_BUFFER)
+			{
+				//split up buffer
+			}
+			/* */
+			//putbuf();
+			break;
+
+		default:
+			printf("no such file format: %i", fd);
+			thread_exit();
+	}
+
+	return writing_count;
 }
 
 void seek (int fd UNUSED, unsigned position UNUSED)
