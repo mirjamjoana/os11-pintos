@@ -167,8 +167,22 @@ void halt (void) {
 //FIXME
 }
 
+// returns 0 if successful, -1 otherwise
 void exit (int status) {
-//FIXME
+	//FIXME
+	struct thread *cur = thread_current (); /* userspace? */
+
+	/* if there is a parent process waiting (methods are not defined at the moment)
+	if (cur_is_someone_waiting()) 
+	{
+		struct thread *par = cur_getParent();
+		par_syscall_return_status(status);
+		cur_exit();
+	}
+	else 
+	{
+		cur_exit();
+	}*/
 }
 
 int exec (const char *cmd_line) {
@@ -269,6 +283,6 @@ syscall_check_pointer (const struct uint8_t *uaddr)
 	return -1;
     }
   else
-	return pagedir_get_page(pd, uaddr);
+	return (int) pagedir_get_page(pd, uaddr);
 }
 
