@@ -5,24 +5,26 @@
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
 
-
 static void syscall_handler (struct intr_frame *);
 
-void handle(int syscall);
-void handle_halt(void);
-void handle_exit(void);
-void handle_exec(void);
-void handle_wait(void);
-void handle_create(void);
-void handle_remove(void);
-void handle_open(void);
-void handle_filesize(void);
-void handle_read(void);
-void handle_write(void);
-void handle_seek(void);
-void handle_tell(void);
-void handle_close(void);
-void handle_no_such_syscall(void);
+void handle_halt(struct intr_frame *f);
+void handle_exit(struct intr_frame *f);
+void handle_exec(struct intr_frame *f);
+void handle_wait(struct intr_frame *f);
+void handle_create(struct intr_frame *f);
+void handle_remove(struct intr_frame *f);
+void handle_open(struct intr_frame *f);
+void handle_filesize(struct intr_frame *f);
+void handle_read(struct intr_frame *f);
+void handle_write(struct intr_frame *f);
+void handle_seek(struct intr_frame *f);
+void handle_tell(struct intr_frame *f);
+void handle_close(struct intr_frame *f);
+void handle_no_such_syscall(struct intr_frame *f);
+
+void syscall_get_arguments(const struct intr_frame *f, int arg_number, int *arg_array);
+void syscall_set_return_value (struct intr_frame *f, int ret_value);
+int syscall_check_pointer (const void *uaddr);
 
 void halt (void);
 void exit (int status);
@@ -38,7 +40,6 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
 
-
 void
 syscall_init (void) 
 {
@@ -46,118 +47,108 @@ syscall_init (void)
 }
 
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler (struct intr_frame *f) 
 {
 	printf ("system call!\n");
 
-	/* retrieve system call number */
-	// get system call number from user space
-	// match system call number to syscall enum
-	int syscall = SYS_HALT;
+	/* retrieve system call number 
+	and switch to corresponding method */
+	unsigned int syscall_number = *( (unsigned int*) f->esp);
 
-	/* handle syscall with its prodecure */
-	handle(syscall);
-}
-
-
-/* invoke corresponding syscall prodecure */
-void 
-handle(int syscall)
-{
-	switch(syscall)
+	switch(syscall_number)
 	{
 		case SYS_HALT:
-			handle_halt();
+			handle_halt(f);
 			break;
 
 		case SYS_EXIT:
-			handle_exit();
+			handle_exit(f);
 			break;
 
 		case SYS_EXEC:
-			handle_exec();
+			handle_exec(f);
 			break;
 
 		case SYS_WAIT:
-			handle_wait();
+			handle_wait(f);
 			break;
 
 		/* file system calls */
 		case SYS_CREATE:
-			handle_create();
+			handle_create(f);
 			break;
  
 		case SYS_REMOVE:
-			handle_remove();
+			handle_remove(f);
 			break;
 
 		case SYS_OPEN:
-			handle_open();
+			handle_open(f);
 			break;
 
 		case SYS_FILESIZE:
-			handle_filesize();
+			handle_filesize(f);
 			break;
 
 		case SYS_READ:
-			handle_read();
+			handle_read(f);
 			break;
 
 		case SYS_WRITE:
-			handle_write();
+			handle_write(f);
 			break;
 
 		case SYS_SEEK:
-			handle_seek();
+			handle_seek(f);
 			break;
 
 		case SYS_TELL:
-			handle_tell();
+			handle_tell(f);
 			break;
 
 		case SYS_CLOSE:
-			handle_close();
+			handle_close(f);
 			break;
 
 		default: /* SYSCALL_ERROR: */
-			handle_no_such_syscall();
+			handle_no_such_syscall(f);
 			break;
 	}
 }
 
-void handle_halt()  {}
+void handle_halt(struct intr_frame *f UNUSED)  {}
 
-void handle_exit()  {}
+void handle_exit(struct intr_frame *f UNUSED)  {}
 
-void handle_exec()  {
+void handle_exec(struct intr_frame *f UNUSED)  {
 	//char* cmd_line = NULL;
 	//struct pid_t pid = exec(cmd_line);
 }
 	
-void handle_wait()  {
+void handle_wait(struct intr_frame *f UNUSED)  {
 	//struct pid_t pid;
 	//int exit_value = wait (pid);
 }
 	
-void handle_create() {}
+void handle_create(struct intr_frame *f UNUSED) {}
 	
-void handle_remove()  {}
+void handle_remove(struct intr_frame *f UNUSED)  {}
 	
-void handle_open() {}
+void handle_open(struct intr_frame *f UNUSED) {}
 
-void handle_filesize()  {}
+void handle_filesize(struct intr_frame *f UNUSED)  {}
 	
-void handle_read() {}
+void handle_read(struct intr_frame *f UNUSED) {}
 	
-void handle_write() {}
+void handle_write(struct intr_frame *f UNUSED) {}
 	
-void handle_seek() {}
+void handle_seek(struct intr_frame *f UNUSED) {}
 	
-void handle_tell() {}
+void handle_tell(struct intr_frame *f UNUSED) {}
 	
-void handle_close() {}
+void handle_close(struct intr_frame *f UNUSED) {}
 	
-void handle_no_such_syscall() {
+void handle_no_such_syscall(struct intr_frame *f UNUSED) {
 	printf("No such system call.\n");
 	thread_exit();
 }
@@ -168,7 +159,7 @@ void halt (void) {
 }
 
 // returns 0 if successful, -1 otherwise
-void exit (int status) {
+void exit (int status UNUSED) {
 	//FIXME
 	struct thread *cur = thread_current (); /* userspace? */
 
@@ -185,104 +176,131 @@ void exit (int status) {
 	}*/
 }
 
-int exec (const char *cmd_line) {
+int exec (const char *cmd_line UNUSED) {
 //FIXME
 	return 0;
 }
 
-int wait (int pid) {
+int wait (int pid UNUSED) {
 //FIXME
 	return 0;
 }
 
-bool create (const char *file, unsigned initial_size) {
+bool create (const char *file UNUSED, unsigned initial_size UNUSED) {
 //FIXME
 	return false;
 }
 
-bool remove (const char *file) {
+bool remove (const char *file UNUSED) {
 	//FIXME
 	return false;
 }
 
 int 
-open (const char *file) 
-{ WAIT:
+open (const char *file UNUSED) 
+{
 	//FIXME
 	return 0;
 }
 
 int 
-filesize (int fd)
+filesize (int fd UNUSED)
 {
 	//FIXME
 	return 0;
 }
 
-int read (int fd, void *buffer, unsigned size) {
+int read (int fd UNUSED, void *buffer UNUSED, unsigned size UNUSED) {
 	//FIXME
 	return 0;
 }
 
-int write (int fd, const void *buffer, unsigned size) {
+int write (int fd UNUSED, const void *buffer UNUSED, unsigned size UNUSED) {
 	//FIXME
 	return 0;
 }
 
-void seek (int fd, unsigned position)
+void seek (int fd UNUSED, unsigned position UNUSED)
 {
 	//FIXME
-	return 0;
 }
 
-unsigned tell (int fd) {
+unsigned tell (int fd UNUSED) {
 	//FIXME
-	return (unsigned) 0;
+	return (unsigned UNUSED) 0;
 }
 
-void close (int fd) {
+void close (int fd UNUSED) {
 	//FIXME
 }
 
-/* get the one argument from user space */
+
+/*
+
+Thus, when the system call handler syscall_handler() gets control, the system call number is in the 32-bit word at the caller's stack pointer, the first argument is in the 32-bit word at the next higher address, and so on. The caller's stack pointer is accessible to syscall_handler() as the esp member of the struct intr_frame passed to it. (struct intr_frame is on the kernel stack.)
+
+The 80x86 convention for function return values is to place them in the EAX register. System calls that return a value can do so by modifying the eax member of struct intr_frame. 
+
+*/
+
 void 
-get_argument(const struct uint8_t *uaddr, int* arg)
+syscall_get_arguments(const struct intr_frame *f, int arg_number, int* arg_array)
 {
-	uint32_t address = syscall_check_pointer (uaddr);
-	
-	if(address != -1){
-		// TODO getValue
-		//*arg = getValue(uaddr);
-	} else {
-		printf("Segmentation fault.");
-		thread_exit();
+	/* loop argument count */
+	int i;
+
+	/* virtual argument address */
+	uint32_t *v_address_arg = ((uint32_t*) f->esp ) + 4;
+
+	/* physical argument address */
+	int *p_address_arg;
+
+	/* get arg_number arguments from the stack*/
+	for(i = 0; i < arg_number; i++)
+	{
+		/* fetch stack pointer of argument 0 and check validity*/
+		//p_address_arg = (int) syscall_check_pointer(v_address_arg);
+		
+		/* get argument 0 */
+		arg_array[i] = *p_address_arg;
+
+		/* increase stack pointer */
+		v_address_arg += 4;
 	}
-	// FIXME
+}
+
+/* saves the return value in the eax register of the user process */
+void
+syscall_set_return_value (struct intr_frame *f, int ret_value)
+{
+	*((int*)f->eax) = ret_value;
 }
 
 /* checks the validity of a user pointer 
 Returns the byte value if successful, -1 if UADDR points to
 not accessible memory.*/
 int
-syscall_check_pointer (const struct uint8_t *uaddr)
+syscall_check_pointer (const void *uaddr)
 {
-  // TODO
-  struct thread *cur = thread_current (); /* userspace? */
-  struct uint32_t *pd;
-  pd = cur->pagedir;
+	// TODO check if this really works ..
+	struct thread *cur = thread_current (); /* userspace? */
+	struct uint32_t *pd;
+	pd = cur->pagedir;
 
-  // Checks whether UADDR is a nullpointer
-  if (pd == NULL)
-    {
-	return -1;
-    }
+	// Checks whether UADDR is a nullpointer
+	if (pd == NULL)
+	{
+		printf("Null pointer.\n");
+		thread_exit();
+	}
 
-  // Checks whether UADDR points to unmapped memory and whether it is a user address
-  else if (pagedir_get_page(pd, uaddr) == NULL)
-    {
-	return -1;
-    }
-  else
-	return (int) pagedir_get_page(pd, uaddr);
+	// Checks whether UADDR points to unmapped memory and whether it is a user address
+	else if (pagedir_get_page(pd, uaddr) == NULL)
+	{
+		printf("Segmentation fault.\n");
+		thread_exit();
+	}
+	else
+		return pagedir_get_page(pd, uaddr);
 }
 
