@@ -50,12 +50,31 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-   /*char s[] = *file_name_;
+   /*
    char *token, *save_ptr;
+   void *arguments;
+   memcpy(arguments; file_name_; sizeof(file_name_));
 
-   for (token = strtok_r (s, " ", &save_ptr); token != NULL;
+   // count number of arguments
+   int i = 0;
+
+   for (token = strtok_r (file_name_, " ", &save_ptr); token != NULL;
         token = strtok_r (NULL, " ", &save_ptr))
-     printf ("'%s'\n", token);
+   		i++;
+
+   // create appropriate number of pointers
+   char* values[i]; 
+
+   char *copied_token;
+   char *copied_pointer;
+
+   //create array of pointers to corresponding arguments
+   for (j = 0; j < i; j++)
+   		memcpy(copied_token; strtok_r (arguments, " ", &copied_pointer) ; sizeof(copied_token));
+		values[j] = copied_token;
+	
+   
+     
 */
 
   char *file_name = file_name_;
