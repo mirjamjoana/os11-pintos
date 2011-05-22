@@ -91,6 +91,13 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     struct list_elem sleepelem;			/* List element for sleeping threads list. */
 
+    struct list_elem childelem;			/* List element for father thread list. */
+//    struct thread *parent;				/* Parent of this thread. */
+
+    struct list children;				/* List of children (including exit status). */
+    struct list file_descriptors;		/* List of file descriptors. */
+    unsigned int file_descriptor_count;	/* Consecutively numbered identifier of file descriptors */
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -103,6 +110,26 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+  };
+
+/* List element of children. */
+struct child
+  {
+    struct list_elem elem;				/* list dummy */
+
+    struct thread* parent;				/* parent thread */
+    struct semaphore* terminated;		/* synchronization semaphore for process wait */
+    bool is_terminated;
+    tid_t tid;							/* thread id */
+    int exit_status; 					/* exit status */
+  };
+
+/* List element of file_descriptors. */
+struct file_descriptor_elem
+  {
+    struct list_elem elem;				/* list dummy */
+    int file_descriptor;				/* file handler number */
+    struct file *file; 					/* file link */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -141,5 +168,7 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+struct list* thread_get_threads(void);
 
 #endif /* threads/thread.h */

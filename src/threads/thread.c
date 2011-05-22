@@ -506,7 +506,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->file_descriptor_count = 2;
   list_push_back (&all_list, &t->allelem);
+
+  /* initialize list of children */
+  list_init (&(t->children));
+  list_init (&(t->file_descriptors));
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -643,3 +648,8 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+/* Returns list of all registered threads . */
+struct list* thread_get_threads(void) {
+	return &all_list;
+}

@@ -17,9 +17,12 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+struct thread* process_get_thread(tid_t tid);
+struct child* process_get_child(tid_t child_tid);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -42,6 +45,7 @@ process_execute (const char *file_name)
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  //TODO add child to child list
   return tid;
 }
 
@@ -113,14 +117,55 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid)
 {
-	//wait(tid_t);
+	/* find thread with id child_tid */
+	struct child* child = process_get_child(child_tid);
 
-  while (true) 
+	/* if child exists and this is the parent thread */
+	if(child != NULL && child->parent == thread_current()) {
+
+		/* waits for child process to increase semaphore
+		   terminated on exit */
+		sema_down(child->terminated);
+
+		/* fetch exit status from child */
+		int exit_status = child->exit_status;
+
+		/* remove terminated child from list */
+		list_remove(&(child->elem));
+
+		/* return exit value */
+		return exit_status;
+
+	}
+	else {
+		return -1;
+	}
+}
+
+/*
+ * Find child with id child_id.
+ */
+struct child*
+process_get_child(tid_t child_tid)
+{
+	/* list of child threads */
+	struct list* children = &(thread_current()->children);
+
+	/* loop variables */
+	struct list_elem *e;
+	struct child *c = NULL;
+
+	/* search child with tid child_tid and return its termination semaphore */
+	for (e = list_begin (children); e != list_end (children); e = list_next (e))
 	{
-	// infinite loop
-	};
+		c = list_entry (e, struct child, elem);
+		if(c->tid == child_tid) {
+			return c;
+		}
+	}
+	return NULL;
 }
 
 /* Free the current process's resources. */
