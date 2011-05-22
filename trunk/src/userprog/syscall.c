@@ -1,12 +1,16 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include <list.h>
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
 #include "threads/vaddr.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "devices/shutdown.h"
 
 #define CONSOLE_BUFFER_SIZE 100
 #define DEBUG 1
@@ -29,9 +33,9 @@ void handle_tell(struct intr_frame *f);
 void handle_close(struct intr_frame *f);
 void handle_no_such_syscall(struct intr_frame *f);
 
-void syscall_get_arguments(const struct intr_frame *f, int arg_number, int *arg_array);
+void* syscall_get_argument(const struct intr_frame *f, unsigned int arg_number);
 void syscall_set_return_value (struct intr_frame *f, int ret_value);
-void * syscall_get_kernel_address (const void *uaddr);
+void* syscall_get_kernel_address (const void *uaddr);
 
 void halt (void);
 void exit (int status);
@@ -49,7 +53,7 @@ void close (int fd);
 
 /* shared variables */
 static struct semaphore filesystem_lock; /* mutex semaphore for filesystem */
-static int open_files[MAX_OPEN_FILES]; /* array of the currently opened files */
+//static int open_files[MAX_OPEN_FILES]; /* array of the currently opened files */
 
 void
 syscall_init (void) 
@@ -136,17 +140,15 @@ syscall_handler (struct intr_frame *f)
 }
 
 void handle_halt(struct intr_frame *f UNUSED)  {
-
 	halt();
 }
 
 void handle_exit(struct intr_frame *f UNUSED)  {
 	/* fetch current status of the user process */
-	int status;
-	syscall_get_arguments(f, 1, &status);
+	int *status = (int *) syscall_get_argument(f, 1);
 	
 	/* call exit */
-	exit(status);
+	exit(*status);
 }
 
 void handle_exec(struct intr_frame *f UNUSED)  {
@@ -199,6 +201,12 @@ void handle_read(struct intr_frame *f UNUSED) {
 void handle_write(struct intr_frame *f UNUSED) {
 	sema_down(&filesystem_lock);
 
+	int fd = *((int*)syscall_get_argument(f, 0));
+	const void *buffer = (const void*) syscall_get_argument(f, 1);
+	unsigned size = *((unsigned int*)syscall_get_argument(f, 2));
+
+	int write_count = write(fd, buffer, size);
+	syscall_set_return_value(f, write_count);
 	sema_up(&filesystem_lock);
 }
 	
@@ -227,27 +235,41 @@ void handle_no_such_syscall(struct intr_frame *f UNUSED) {
 }
 
 
-/* Halts the machine */
+/*
+ * Terminates Pintos by calling power_off() (declared in "threads/init.h").
+ * This should be seldom used, because you lose some information about possible deadlock situations, etc.
+ */
 void halt (void) {
-//FIXME
+	shutdown_power_off();
 }
 
 
-void exit (int status UNUSED) {
-	//FIXME
-	struct thread *cur = thread_current (); /* userspace? */
+void exit (int status) {
 
-	/* if there is a parent process waiting (methods are not defined at the moment)
-	if (cur_is_someone_waiting()) 
+	struct thread *cur_thread = thread_current();
+	struct thread *parent_thread = cur_thread->parent;
+
+	/* if thread has a parent thread, save exit status */
+	if (parent_thread != NULL)
 	{
-		struct thread *par = cur_getParent();
-		par_syscall_return_status(status);
-		cur_exit();
+		/* children of parent thread */
+		struct list children = parent_thread->children;
+
+		struct list_elem *e;
+		for (e = list_begin (&children); e != list_end (&children); e = list_next (e))
+		{
+		  struct child *c = list_entry (e, struct child, elem);
+		  if(c->tid == cur_thread->tid) {
+			  c->exit_status = status;
+			  break; /* counted as return */
+		  }
+		}
 	}
-	else 
-	{
-		cur_exit();
-	}*/
+
+	/* print exit message */
+	printf ("%s: exit(%d)\n", cur_thread->name, status);
+
+	/* TODO free resources ? */
 }
 
 int exec (const char *cmd_line UNUSED) {
@@ -256,6 +278,8 @@ int exec (const char *cmd_line UNUSED) {
 }
 
 int wait (int pid UNUSED) {
+	/* todo check in current threads children if the process has been terminated, that is exit_status >= 0 */
+
 	/* infinite wait */
 	thread_block();
 	return 0;
@@ -296,18 +320,53 @@ int write (int fd, const void *buffer, unsigned size) {
 
 	switch(fd) 
 	{
-		case 1: /* console */
+		case STDOUT_FILENO: /* System console, stdio.h */
+
+			/* split too large buffer */
 			if(size > CONSOLE_BUFFER_SIZE)
 			{
-				//split up buffer
+				/* TODO split buffer in chunks of
+				 * CONSOLE_BUFFER_SIZE large buffers */
+				putbuf((const char *)buffer, size);
+				writing_count += size;
+			} else {
+				/* write buffer as it is to console */
+				putbuf((const char *)buffer, size);
+				writing_count += size;
 			}
-			/* */
-			//putbuf();
 			break;
 
-		default:
-			printf("no such file format: %i", fd);
-			thread_exit();
+		case STDIN_FILENO: /* not assigned yet */
+			break;
+
+		default: { /* check user thread file descriptors */
+
+			/* get file descriptor list */
+			struct list *file_descriptors = &(thread_current()->file_descriptors);
+
+			/* loop variables */
+			struct list_elem *e;
+			struct file_descriptor_elem *fde;
+
+			for (e = list_begin (file_descriptors); e != list_end (file_descriptors); e = list_next(e))
+			{
+				fde = list_entry (e, struct file_descriptor_elem, elem);
+
+				/* if the right file descriptor has been found
+				 * write buffer to file */
+				if (fde->file_descriptor == fd)
+				{
+					writing_count += file_write (fde->file, buffer, size);
+					break; /* jump out of for-loop */
+				}
+			}
+			break; /* jump out of switch-case */
+
+			/* no fitting file desciptor found, panic! */
+			printf("No such file descriptor: %i\n", fd);
+
+			//TODO return to handler and terminate process
+		}
 	}
 
 	return writing_count;
@@ -329,37 +388,17 @@ void close (int fd UNUSED) {
 
 
 /*
-
-Thus, when the system call handler syscall_handler() gets control, the system call number is in the 32-bit word at the caller's stack pointer, the first argument is in the 32-bit word at the next higher address, and so on. The caller's stack pointer is accessible to syscall_handler() as the esp member of the struct intr_frame passed to it. (struct intr_frame is on the kernel stack.)
-
-The 80x86 convention for function return values is to place them in the EAX register. System calls that return a value can do so by modifying the eax member of struct intr_frame. 
-
+ * Get argument arg_number from user space.
 */
 
-void 
-syscall_get_arguments(const struct intr_frame *f, int arg_number, int* arg_array)
+void* syscall_get_argument(const struct intr_frame *f, unsigned int arg_number)
 {
-	/* loop argument count */
-	int i;
 
 	/* virtual argument address */
-	uint32_t *v_address_arg = ((uint32_t*) f->esp ) + 4;
+	uint32_t *user_address_arg = ((uint32_t*) f->esp ) + (arg_number + 1) * sizeof(void *);
 
-	/* physical argument address */
-	int *p_address_arg;
-
-	/* get arg_number arguments from the stack*/
-	for(i = 0; i < arg_number; i++)
-	{
-		/* fetch stack pointer of argument 0 and check validity*/
-		//p_address_arg = (int) syscall_check_pointer(v_address_arg);
-		
-		/* get argument 0 */
-		arg_array[i] = *p_address_arg;
-
-		/* increase stack pointer */
-		v_address_arg += 4;
-	}
+	/* fetch stack pointer of argument i and check validity*/
+	return syscall_get_kernel_address(user_address_arg);
 }
 
 /* saves the return value in the eax register of the user process */
