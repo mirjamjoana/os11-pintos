@@ -497,6 +497,9 @@ open (const char *file_name)
     	/* set & increase file descriptor number */
     	file_descriptor->file_descriptor = thread_current()->fd_next_id++;
 
+    	/* set file in file descriptor */
+    	file_descriptor->file = file;
+
     	/* insert new file descriptor into descriptor list */
 		list_push_front(file_descriptors, &(file_descriptor->elem));
 
