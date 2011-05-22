@@ -8,11 +8,13 @@
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "devices/shutdown.h"
 
 #define CONSOLE_BUFFER_SIZE 100
+#define MAX_OPEN_FILES 128
 #define DEBUG 1
 
 /* prototypes */
@@ -51,9 +53,8 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
 
-/* shared variables */
+/* global variables */
 static struct lock filesystem_lock; /* mutex semaphore for filesystem */
-//static int open_files[MAX_OPEN_FILES]; /* array of the currently opened files */
 
 void
 syscall_init (void) 
@@ -370,7 +371,7 @@ void exit (int status) {
 		sema_up(list_element->terminated);
 	}
 
-	/* TODO free resources */
+	/* TODO free resources before exiting */
 
 	/* print exit message */
 	printf ("%s: exit(%d)\n", cur_thread->name, status);
@@ -438,9 +439,9 @@ int wait (int pid) {
  * if successful, false otherwise. Creating a new file does not open it: opening the
  * new file is a separate operation which would require a open system call.
  */
-bool create (const char *file UNUSED, unsigned initial_size UNUSED) {
-//FIXME
-	return false;
+bool create (const char *file, unsigned initial_size) {
+	/* create file called file with initial size initial_size*/
+	return filesys_create(file, initial_size);
 }
 
 /*
@@ -448,9 +449,9 @@ bool create (const char *file UNUSED, unsigned initial_size UNUSED) {
  * A file may be removed regardless of whether it is open or closed, and removing
  * an open file does not close it. See Removing an Open File, for details.
  */
-bool remove (const char *file UNUSED) {
-	//FIXME
-	return false;
+bool remove (const char *file) {
+	/* removes file from file system */
+	return filesys_remove(file);
 }
 
 /*
@@ -474,10 +475,37 @@ bool remove (const char *file UNUSED) {
  * share a file position.
  */
 int 
-open (const char *file UNUSED) 
+open (const char *file_name)
 {
-	//FIXME
-	return 0;
+	/* open file */
+    struct file *file = filesys_open(file_name);
+
+    /* check if file is opend properly */
+    if (file == NULL){
+    	return -1;
+    }
+
+    /* fetch file descriptor list */
+    struct list* file_descriptors = &(thread_current()->file_descriptors);
+
+    /* create new file descriptor for file file */
+    struct file_descriptor_elem *file_descriptor = (struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));
+
+    /* if there is space left */
+    if(list_size(file_descriptors) < MAX_OPEN_FILES)
+    {
+    	/* set & increase file descriptor number */
+    	file_descriptor->file_descriptor = thread_current()->fd_next_id++;
+
+    	/* insert new file descriptor into descriptor list */
+		list_push_front(file_descriptors, &(file_descriptor->elem));
+
+		return file_descriptor->file_descriptor;
+	}
+    else
+    {
+    	return -1;
+    }
 }
 
 /*
