@@ -368,8 +368,10 @@ exit (int status)
 
 	/* get current thread */
 	struct thread *cur_thread = thread_current();
-	/* get list element of current thread */
-	struct child *list_element = list_entry (&(cur_thread->childelem), struct child, elem);
+
+	/* get child element of current thread */
+	struct child *list_element = process_get_child(cur_thread->tid);
+
 	/* get parent thread */
 	struct thread *parent_thread = list_element->parent;
 
@@ -380,10 +382,8 @@ exit (int status)
 		list_element->exit_status = status;
 
 		/* set termination semaphore */
-		sema_up(list_element->terminated);
+		sema_up(&list_element->terminated);
 	}
-
-	/* TODO free resources before exiting */
 
 	/* print exit message */
 	printf ("%s: exit(%d)\n", cur_thread->name, status);
@@ -501,7 +501,7 @@ open (const char *file_name)
 	/* open file */
     struct file *file = filesys_open(file_name);
 
-    /* check if file is opend properly */
+    /* check if file is opened properly */
     if (file == NULL){
     	return -1;
     }
@@ -509,12 +509,12 @@ open (const char *file_name)
     /* fetch file descriptor list */
     struct list* file_descriptors = &(thread_current()->file_descriptors);
 
-    /* create new file descriptor for file file */
-    struct file_descriptor_elem *file_descriptor = (struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));
-
     /* if there is space left */
     if(list_size(file_descriptors) < MAX_OPEN_FILES)
     {
+    	/* create new file descriptor for file file */
+		struct file_descriptor_elem *file_descriptor = (struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));
+
     	/* set & increase file descriptor number */
     	file_descriptor->file_descriptor = thread_current()->fd_next_id++;
 
@@ -588,21 +588,32 @@ write (int fd, const void *buffer, unsigned size)
 
 	switch(fd) 
 	{
-		case STDOUT_FILENO: /* System console, stdio.h */
+		case STDOUT_FILENO: { /* System console, stdio.h */
 
 			/* split too large buffer */
 			if(size > CONSOLE_BUFFER_SIZE)
 			{
-				/* TODO split buffer in chunks of
+				/* split buffer in chunks of
 				 * CONSOLE_BUFFER_SIZE large buffers */
-				putbuf((const char *)buffer, size);
-				writing_count += size;
+
+				void * buffer_pointer = (void *) buffer;
+
+				unsigned i;
+				for(i = 0; i < size; i += CONSOLE_BUFFER_SIZE)
+				{
+					putbuf((const char *)buffer_pointer + i, CONSOLE_BUFFER_SIZE);
+					writing_count += CONSOLE_BUFFER_SIZE;
+				}
+
+
+
 			} else {
 				/* write buffer as it is to console */
 				putbuf((const char *)buffer, size);
 				writing_count += size;
 			}
 			break;
+		}
 
 		case STDIN_FILENO: /* not assigned yet */
 			break;
