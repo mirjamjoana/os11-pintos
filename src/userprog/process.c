@@ -66,26 +66,57 @@ start_process (void *file_name_)
         token = strtok_r (NULL, " ", &save_ptr))
    		i++;
 
-   // create appropriate number of pointers
+   // create appropriate number of values and pointers
    char* values[i]; 
+   char* pointer[i]; 
 
    char *copied_token;
-/*
-   char *copied_pointer = malloc();
 
+   char *copied_pointer;
+   malloc(sizeof(copied_pointer));
+   
+   // get stack pointer
+   void* esp = (void *) thread_current()->stack;
+
+   int j = 0;
    //create array of pointers to corresponding arguments
    for (j = 0; j < i; j++) {
-	   1) strtok_r (arguments, " ", &copied_pointer)
-	   2) malloc();
-	   3) memcpy(copied_token, , sizeof(copied_token));
-	   4) values[j] = copied_token;
+	   char *temp = strtok_r (arguments, " ", &copied_pointer);
+	   malloc(sizeof(temp));
+	   memcpy(copied_token, temp, sizeof(copied_token));
+	   values[j] = copied_token;
+	   pointer[j] = copied_pointer;
+   }
+   
+   //word-alligned access
+   if (sizeof(values) % 4 != 0) {
+        esp -= (sizeof(values) % 4);
+   }
+   
+   //allocate memory
+   malloc(sizeof(values));
+   /*
+   // put arguments on the stack
+   for (j = 0; j < i; j++) {
+        *esp = values[j];
+        esp -= 4;
    }
 
-   5) spacer einfuegen
-   6) pointer array erstellen fuer argument
-   7) pointer auf array + anzahl argumente
+    // Null pointer sentinel
+   *esp = NULL;
+   esp -= 4;
+   
+   // put addresses on the stack
+   for (j = i; j < 2*i +1; j++) {
+        *esp = pointer[j];
+        esp -= 4;
+   }
+
+    // fake return address
+   *esp = void * (); 
 */
 
+  // TODO
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
