@@ -38,6 +38,8 @@ static void handle_no_such_syscall(struct intr_frame *f);
 static void* syscall_get_argument(const struct intr_frame *f, unsigned int arg_number);
 static void syscall_set_return_value (struct intr_frame *f, int ret_value);
 static void* syscall_get_kernel_address (const void *uaddr);
+static struct file* syscall_get_file(int file_descriptor);
+
 
 void halt (void);
 void exit (int status);
@@ -293,7 +295,9 @@ handle_write(struct intr_frame *f)
 	syscall_set_return_value(f, write_count);
 }
 	
-static void handle_seek(struct intr_frame *f) {
+static void
+handle_seek(struct intr_frame *f)
+{
 	int fd = *((int*)syscall_get_argument(f, 0)); /* file descriptor */
 	unsigned position = *((unsigned int*)syscall_get_argument(f, 1)); /* file position */
 
@@ -307,7 +311,9 @@ static void handle_seek(struct intr_frame *f) {
 	lock_release(&filesystem_lock);
 }
 	
-static void handle_tell(struct intr_frame *f) {
+static void
+handle_tell(struct intr_frame *f)
+{
 	int fd = *((int*)syscall_get_argument(f, 0)); /* file descriptor */
 
 	/* acquire file system lock */
@@ -329,7 +335,9 @@ static void handle_close(struct intr_frame *f UNUSED) {
 	lock_release(&filesystem_lock);
 }
 	
-static void handle_no_such_syscall(struct intr_frame *f UNUSED) {
+static void
+handle_no_such_syscall(struct intr_frame *f UNUSED)
+{
 	unsigned int syscall_number = *( (unsigned int*) f->esp);
 	printf("No such system call: %i.\n", syscall_number);
 	thread_exit();
@@ -341,7 +349,9 @@ static void handle_no_such_syscall(struct intr_frame *f UNUSED) {
  * This should be seldom used, because you lose some information about possible
  * deadlock situations, etc.
  */
-void halt (void) {
+void
+halt (void)
+{
 	/* shutdown pintos */
 	shutdown_power_off();
 }
@@ -352,7 +362,9 @@ void halt (void) {
  * that will be returned. Conventionally, a status of 0 indicates success
  * and nonzero values indicate errors.
  */
-void exit (int status) {
+void
+exit (int status)
+{
 
 	/* get current thread */
 	struct thread *cur_thread = thread_current();
@@ -388,7 +400,10 @@ void exit (int status) {
  * the exec until it knows whether the child process successfully loaded its
  * executable. You must use appropriate synchronization to ensure this.
  */
-int exec (const char *cmd_line) {
+int
+exec (const char *cmd_line)
+{
+	/* execute process */
 	return (int) process_execute(cmd_line);
 }
 
@@ -429,7 +444,9 @@ int exec (const char *cmd_line) {
  * to the comment at the top of the function and then implement the wait system call in
  * terms of process_wait().
  */
-int wait (int pid) {
+int
+wait (int pid)
+{
 	/* wait for child process with process id pid */
 	return process_wait(pid);
 }
@@ -439,7 +456,9 @@ int wait (int pid) {
  * if successful, false otherwise. Creating a new file does not open it: opening the
  * new file is a separate operation which would require a open system call.
  */
-bool create (const char *file, unsigned initial_size) {
+bool
+create (const char *file, unsigned initial_size)
+{
 	/* create file called file with initial size initial_size*/
 	return filesys_create(file, initial_size);
 }
@@ -449,7 +468,9 @@ bool create (const char *file, unsigned initial_size) {
  * A file may be removed regardless of whether it is open or closed, and removing
  * an open file does not close it. See Removing an Open File, for details.
  */
-bool remove (const char *file) {
+bool
+remove (const char *file)
+{
 	/* removes file from file system */
 	return filesys_remove(file);
 }
@@ -515,10 +536,13 @@ open (const char *file_name)
  * Returns the size, in bytes, of the file open as fd.
  */
 int 
-filesize (int fd UNUSED)
+filesize (int fd)
 {
-	//FIXME
-	return 0;
+	/* get file */
+	struct file *f = syscall_get_file(fd);
+
+	/* return size */
+	return (int) file_length(f);
 }
 
 /*
@@ -527,9 +551,15 @@ filesize (int fd UNUSED)
  * the file could not be read (due to a condition other than end
  * of file). Fd 0 reads from the keyboard using input_getc().
  */
-int read(int fd UNUSED, void *buffer UNUSED, unsigned size UNUSED) {
-	//FIXME
-	return 0;
+int
+read(int fd, void *buffer, unsigned size)
+{
+	/* get file */
+	struct file *f = syscall_get_file(fd);
+
+	/* read size bytes into buffer and
+	 * return actually read bytes */
+	return (int) file_read(f, buffer, (off_t) size);
 }
 
 /*
@@ -550,7 +580,9 @@ int read(int fd UNUSED, void *buffer UNUSED, unsigned size UNUSED) {
  * processes may end up interleaved on the console, confusing both
  * human readers and our grading scripts.
  */
-int write (int fd, const void *buffer, unsigned size) {
+int
+write (int fd, const void *buffer, unsigned size)
+{
 	/* local variables */
 	int writing_count = 0;
 
@@ -577,31 +609,22 @@ int write (int fd, const void *buffer, unsigned size) {
 
 		default: { /* check user thread file descriptors */
 
-			/* get file descriptor list */
-			struct list *file_descriptors = &(thread_current()->file_descriptors);
+			/* try to catch file with file descriptor fd */
+			struct file * f = syscall_get_file(fd);
 
-			/* loop variables */
-			struct list_elem *e;
-			struct file_descriptor_elem *fde;
-
-			for (e = list_begin (file_descriptors); e != list_end (file_descriptors); e = list_next(e))
+			/* if matching file descriptor has been found */
+			if(f != NULL)
 			{
-				fde = list_entry (e, struct file_descriptor_elem, elem);
-
-				/* if the right file descriptor has been found
-				 * write buffer to file */
-				if (fde->file_descriptor == fd)
-				{
-					writing_count += file_write (fde->file, buffer, size);
-					break; /* jump out of for-loop */
-				}
+				/* write buffer to file */
+				writing_count += file_write(f, buffer, size);
 			}
-			break; /* jump out of switch-case */
+			else {
+				/* no fitting file desciptor found, panic! */
+				printf("No such file descriptor: %i\n", fd);
 
-			/* no fitting file desciptor found, panic! */
-			printf("No such file descriptor: %i\n", fd);
-
-			//TODO return to handler and terminate process
+				//TODO return to handler and terminate process
+				thread_exit();
+			}
 		}
 	}
 
@@ -620,31 +643,67 @@ int write (int fd, const void *buffer, unsigned size) {
  * return an error.) These semantics are implemented in the file system and
  * do not require any special effort in system call implementation.
  */
-void seek (int fd UNUSED, unsigned position UNUSED)
+void
+seek (int fd, unsigned position)
 {
-	//FIXME
+	/* get file */
+	struct file *f = syscall_get_file(fd);
+
+	/* set file position to position */
+	file_seek(f, (off_t) position);
 }
 
 /*
  * Returns the position of the next byte to be read or written in open file fd, expressed in bytes from the beginning of the file.
  */
-unsigned tell (int fd UNUSED) {
-	//FIXME
-	return (unsigned) 0;
+unsigned
+tell (int fd)
+{
+	/* get file */
+	struct file *f = syscall_get_file(fd);
+
+	/* return next file position */
+	return (unsigned) file_tell(f);
 }
 
 /*
  * Closes file descriptor fd. Exiting or terminating a process implicitly closes all its open file descriptors, as if by calling this function for each one.
  */
-void close (int fd UNUSED) {
-	//FIXME
+void
+close (int fd)
+{
+	/* get threads file descriptors */
+	struct list* file_descriptors = &(thread_current()->file_descriptors);
+
+	/* loop variables */
+	struct list_elem *e;
+	struct file_descriptor_elem *fde;
+
+	/* search matching file */
+	for (e = list_begin (file_descriptors); e != list_end (file_descriptors); e = list_next(e))
+	{
+		/* fetch list element */
+		fde = list_entry (e, struct file_descriptor_elem, elem);
+
+		/* if mathing element has been found  */
+		if (fde->file_descriptor == fd)
+		{
+			/* close and delete file object */
+			file_close(fde->file);
+
+			/* remove child from list */
+			list_remove(fde);
+			// delete fde->file_descriptor ?
+		}
+	}
 }
 
 
 /*
  * Get argument arg_number from user space.
 */
-static void * syscall_get_argument(const struct intr_frame *f, unsigned int arg_number)
+static void *
+syscall_get_argument(const struct intr_frame *f, unsigned int arg_number)
 {
 	/* virtual address of argument arg_number */
 	uint32_t *user_address_arg = ((uint32_t*) f->esp ) + (arg_number + 1) * sizeof(void *);
@@ -653,8 +712,12 @@ static void * syscall_get_argument(const struct intr_frame *f, unsigned int arg_
 	return syscall_get_kernel_address(user_address_arg);
 }
 
-/* saves the return value in the eax register of the user process */
-static void syscall_set_return_value (struct intr_frame *f, int ret_value)
+/*
+ * Save the return value in the eax register
+ * of the user process
+ */
+static void
+syscall_set_return_value (struct intr_frame *f, int ret_value)
 {
 	*((int*)f->eax) = ret_value;
 }
@@ -664,12 +727,13 @@ static void syscall_set_return_value (struct intr_frame *f, int ret_value)
  * address uaddr. Returns NULL if uaddr points to not
  * accessible memory.
  */
-static void * syscall_get_kernel_address (const void *uaddr)
+static void *
+syscall_get_kernel_address (const void *uaddr)
 {
 	struct thread *current_thread = thread_current();
 	uint32_t *pd = current_thread->pagedir;
 
-	// Checks whether UADDR is a nullpointer
+	/* Checks whether UADDR is a nullpointer */
 	if (pd == NULL || uaddr == NULL)
 	{
 		if(DEBUG) printf("Null pointer.\n");
@@ -677,7 +741,7 @@ static void * syscall_get_kernel_address (const void *uaddr)
 		thread_exit();
 	}
 
-	// Checks whether UADDR points to unmapped memory and whether it is a user address
+	/* Checks whether UADDR points to unmapped memory and whether it is a user address */
 	else if ( uaddr <= (void *) 0x08084000 /* - 64 * 1024 * 1024 */ || uaddr >= PHYS_BASE)
 	{
 		if(DEBUG) printf("Segmentation fault.\n");
@@ -688,3 +752,33 @@ static void * syscall_get_kernel_address (const void *uaddr)
 		return pagedir_get_page(pd, uaddr);
 }
 
+/*
+ * Get file descriptor element from file descriptor list
+ * with id fd.
+ */
+static struct file *
+syscall_get_file(int file_descriptor)
+{
+	/* get threads file descriptors */
+	struct list* file_descriptors = &(thread_current()->file_descriptors);
+
+	/* loop variables */
+	struct list_elem *e;
+	struct file_descriptor_elem *fde;
+
+	/* search matching file */
+	for (e = list_begin (file_descriptors); e != list_end (file_descriptors); e = list_next(e))
+	{
+		/* fetch list element */
+		fde = list_entry (e, struct file_descriptor_elem, elem);
+
+		/* if the right file descriptor has been found return file */
+		if (fde->file_descriptor == file_descriptor)
+		{
+			return fde->file;
+		}
+	}
+
+	/* if no file descriptor is found, return null */
+	return NULL;
+}
