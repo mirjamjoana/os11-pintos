@@ -506,7 +506,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  t->file_descriptor_count = 2;
+  t->fd_next_id = 2;
   list_push_back (&all_list, &t->allelem);
 
   /* initialize list of children */
