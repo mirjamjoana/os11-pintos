@@ -692,7 +692,7 @@ close (int fd)
 			file_close(fde->file);
 
 			/* remove child from list */
-			list_remove(fde);
+			list_remove(&(fde->elem));
 			// delete fde->file_descriptor ?
 		}
 	}
