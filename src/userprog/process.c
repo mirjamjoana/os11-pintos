@@ -54,10 +54,10 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-   /*
+
    char *token, *save_ptr;
    void *arguments;
-   memcpy(arguments; file_name_; sizeof(file_name_));
+   memcpy(arguments, file_name_, sizeof(file_name_));
 
    // count number of arguments
    int i = 0;
@@ -70,15 +70,20 @@ start_process (void *file_name_)
    char* values[i]; 
 
    char *copied_token;
-   char *copied_pointer;
+/*
+   char *copied_pointer = malloc();
 
    //create array of pointers to corresponding arguments
-   for (j = 0; j < i; j++)
-   		memcpy(copied_token; strtok_r (arguments, " ", &copied_pointer) ; sizeof(copied_token));
-		values[j] = copied_token;
-	
-   
-     
+   for (j = 0; j < i; j++) {
+	   1) strtok_r (arguments, " ", &copied_pointer)
+	   2) malloc();
+	   3) memcpy(copied_token, , sizeof(copied_token));
+	   4) values[j] = copied_token;
+   }
+
+   5) spacer einfuegen
+   6) pointer array erstellen fuer argument
+   7) pointer auf array + anzahl argumente
 */
 
   char *file_name = file_name_;
