@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "filesys/file.h"
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -92,9 +93,6 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     struct list_elem sleepelem;			/* List element for sleeping threads list. */
 
-    struct list_elem childelem;			/* List element for father thread list. */
-//    struct thread *parent;				/* Parent of this thread. */
-
     struct list children;				/* List of children (including exit status). */
     struct list file_descriptors;		/* List of file descriptors. */
     unsigned int fd_next_id;			/* Consecutively numbered identifier for file descriptors */
@@ -119,8 +117,7 @@ struct child
     struct list_elem elem;				/* list dummy */
 
     struct thread* parent;				/* parent thread */
-    struct semaphore* terminated;		/* synchronization semaphore for process wait */
-    bool is_terminated;
+    struct semaphore terminated;		/* synchronization semaphore for process wait */
     tid_t tid;							/* thread id */
     int exit_status; 					/* exit status */
   };

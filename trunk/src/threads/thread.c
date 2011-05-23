@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "filesys/file.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -336,6 +337,21 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+  list_remove (&thread_current()->sleepelem);
+
+  /* empty child list */
+  while (!list_empty (&(thread_current()->children)))
+    {
+	  /* get current list element */
+      struct list_elem *e = list_pop_front (&(thread_current()->children));
+
+      /* get child */
+      struct child *c = list_entry (e, struct child, elem);
+
+	  /* free file descriptor element */
+	  free(c);
+  }
+
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();

@@ -15,6 +15,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
@@ -44,8 +45,20 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
-  //TODO add child to child list
+    palloc_free_page (fn_copy);
+
+  /* create new child for children list */
+  struct child * c = (struct child *) malloc(sizeof(struct child));
+
+  /* initialize fields */
+  sema_init(&c->terminated, 0);
+  c->parent = thread_current();
+  c->exit_status = -1;
+  c->tid = tid;
+
+  /* add child process to children */
+  list_push_front(&thread_current()->children, &c->elem);
+
   return tid;
 }
 
@@ -163,13 +176,14 @@ process_wait (tid_t child_tid)
 
 		/* waits for child process to increase semaphore
 		   terminated on exit */
-		sema_down(child->terminated);
+		sema_down(&child->terminated);
 
 		/* fetch exit status from child */
 		int exit_status = child->exit_status;
 
 		/* remove terminated child from list */
 		list_remove(&(child->elem));
+		free(child);
 
 		/* return exit value */
 		return exit_status;
@@ -210,6 +224,22 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  /* close all open files and empty file list */
+  while (!list_empty (&(thread_current()->file_descriptors)))
+    {
+	  /* get current list element */
+      struct list_elem *e = list_pop_front (&(thread_current()->file_descriptors));
+
+      /* get file descriptor element */
+      struct file_descriptor_elem *fde = list_entry (e, struct file_descriptor_elem, elem);
+
+	  /* close file */
+	  file_close(fde->file);
+
+	  /* free file descriptor element */
+	  free(fde);
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
