@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "filesys/file.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -96,7 +97,7 @@ struct thread
 
     struct list children;				/* List of children (including exit status). */
     struct list file_descriptors;		/* List of file descriptors. */
-    unsigned int file_descriptor_count;	/* Consecutively numbered identifier of file descriptors */
+    unsigned int fd_next_id;			/* Consecutively numbered identifier for file descriptors */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
