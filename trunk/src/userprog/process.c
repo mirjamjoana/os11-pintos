@@ -65,86 +65,161 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void * command_line_input)
 {
+	/* loop variables */
+	char *token, *save_ptr;
 
-   char *token, *save_ptr;
-   void *arguments;
-   memcpy(arguments, file_name_, sizeof(file_name_));
+	/* copy of the command line input */
+	void *command_line_input_copy = malloc(sizeof(command_line_input));
+	memcpy(command_line_input_copy, (const void*) command_line_input, sizeof(command_line_input));
 
-   // count number of arguments
-   int i = 0;
-
-   for (token = strtok_r (file_name_, " ", &save_ptr); token != NULL;
+   /* count number of arguments */
+   int argument_count = 0;
+   for (token = strtok_r ((char *)command_line_input_copy, " ", &save_ptr); token != NULL;
         token = strtok_r (NULL, " ", &save_ptr))
-   		i++;
+	   argument_count++;
 
-   // create appropriate number of values and pointers
-   char* values[i]; 
-   char* pointer[i]; 
-
-   char *copied_token;
-
-   char *copied_pointer;
-   malloc(sizeof(copied_pointer));
+   /* create appropriate number of argument pointers */
+   char** arguments = malloc(argument_count * sizeof(char*));
    
-   // get stack pointer
-   void* esp = (void *) thread_current()->stack;
-
-   int j = 0;
-   //create array of pointers to corresponding arguments
-   for (j = 0; j < i; j++) {
-	   char *temp = strtok_r (arguments, " ", &copied_pointer);
-	   malloc(sizeof(temp));
-	   memcpy(copied_token, temp, sizeof(copied_token));
-	   values[j] = copied_token;
-	   pointer[j] = copied_pointer;
-   }
-   
-   //word-alligned access
-   if (sizeof(values) % 4 != 0) {
-        esp -= (sizeof(values) % 4);
-   }
-   
-   //allocate memory
-   malloc(sizeof(values));
    /*
-   // put arguments on the stack
-   for (j = 0; j < i; j++) {
-        *esp = values[j];
-        esp -= 4;
+    * save token pointers into arguments array
+    *
+    * arguments[0] => filename
+    * arguments[1..n] => argument 0 .. n-1
+    */
+   int i = 0;
+   for (token = strtok_r ((char *)command_line_input, " ", &save_ptr); token != NULL;
+        token = strtok_r (NULL, " ", &save_ptr))
+   {
+	   arguments[i] = token;
+	   i++;
    }
 
-    // Null pointer sentinel
-   *esp = NULL;
-   esp -= 4;
-   
-   // put addresses on the stack
-   for (j = i; j < 2*i +1; j++) {
-        *esp = pointer[j];
-        esp -= 4;
-   }
+   /* assert that the command line input
+      has not changed over time */
+   ASSERT(i == argument_count);
 
-    // fake return address
-   *esp = void * (); 
-*/
+   /* load file begin */
+	char *file_name = arguments[0];
+	struct intr_frame if_;
+	bool success;
 
-  // TODO
-  char *file_name = file_name_;
-  struct intr_frame if_;
-  bool success;
+	/* Initialize interrupt frame and load executable. */
+	memset (&if_, 0, sizeof if_);
+	if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+	if_.cs = SEL_UCSEG;
+	if_.eflags = FLAG_IF | FLAG_MBS;
+	success = load (file_name, &if_.eip, &if_.esp);
 
-  /* Initialize interrupt frame and load executable. */
-  memset (&if_, 0, sizeof if_);
-  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
-  if_.cs = SEL_UCSEG;
-  if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
 
-  /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+	/* if load was successful */
+	if(success){
+
+		/* EXAMPLE STACK
+
+			Address 	Name 			Data 		Type
+			0xbffffffc 	argv[3][...] 	"bar\0" 	char[4]
+			0xbffffff8 	argv[2][...] 	"foo\0" 	char[4]
+			0xbffffff5 	argv[1][...] 	"-l\0" 		char[3]
+			0xbfffffed 	argv[0][...] 	"/bin/ls\0" char[8]
+			0xbfffffec 	word-align 		0 			uint8_t
+			0xbfffffe8 	argv[4] 		0 			char *
+			0xbfffffe4 	argv[3] 		0xbffffffc 	char *
+			0xbfffffe0 	argv[2] 		0xbffffff8 	char *
+			0xbfffffdc 	argv[1] 		0xbffffff5 	char *
+			0xbfffffd8 	argv[0] 		0xbfffffed 	char *
+			0xbfffffd4 	argv 			0xbfffffd8 	char **
+			0xbfffffd0 	argc 			4 			int
+			0xbfffffcc 	return address 	0 			void (*) ()
+
+		   */
+
+	  /* get stack pointer */
+	  void* esp = if_.esp;
+
+	  /* loop variables */
+	  int j;
+	  const void * src;
+	  unsigned size;
+
+	  /* copy arguments on stack in reversed order */
+	  for (j = argument_count; j >= 0; j--)
+	  {
+		  /* fetch argument pointer */
+		  src = (const void *) arguments[j];
+
+		  /* get argument size */
+		  size = strlen((const char*)src);
+
+		  /* decrement stack pointer */
+		  esp -= size;
+
+		  /* store argument stack pointer */
+		  arguments[j] = esp;
+
+		  /* copy argument */
+		  memcpy(esp, src, size);
+	  }
+
+	  /* check if stack pointer is word aligned */
+	  unsigned fragmentation = ((unsigned) esp) % 4;
+	  if(fragmentation != 0)
+	  {
+		  /* if not, make it! */
+		  esp -= 4 - fragmentation;
+	  }
+
+	  /* stack pointer has to be word aligned */
+	  ASSERT(((unsigned)esp) % 4 == 0);
+
+// ---------------------------- TODO copy argument pointer + argv + argc + return address on stack
+		/*
+		  //create array of pointers to corresponding arguments
+		  for (j = 0; j < i; j++) {
+			   char *temp = strtok_r (arguments, " ", &copied_pointer);
+			   malloc(sizeof(temp));
+			   memcpy(copied_token, temp, sizeof(copied_token));
+			   values[j] = copied_token;
+			   pointer[j] = copied_pointer;
+		  }
+
+		  //word-alligned access
+		  if (sizeof(values) % 4 != 0) {
+			   esp -= (sizeof(values) % 4);
+		  }
+
+		  //allocate memory
+		  malloc(sizeof(values));
+
+		  // put arguments on the stack
+		  for (j = 0; j < i; j++) {
+			   *esp = values[j];
+			   esp -= 4;
+		  }
+
+		   // Null pointer sentinel
+		  *esp = NULL;
+		  esp -= 4;
+
+		  // put addresses on the stack
+		  for (j = i; j < 2*i +1; j++) {
+			   *esp = pointer[j];
+			   esp -= 4;
+		  }
+
+		   // fake return address
+		  *esp = void * ();
+		*/
+	}
+
+	/* If load failed, quit. */
+	palloc_free_page (file_name);
+	if (!success)
+		thread_exit ();
+
+  /************* INSERT CODE HERE *****************************/
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -580,7 +655,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 12;
+    	  *esp = PHYS_BASE;
       else
         palloc_free_page (kpage);
     }
