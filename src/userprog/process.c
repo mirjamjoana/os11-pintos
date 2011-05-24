@@ -188,7 +188,7 @@ start_process (void * command_line_input)
 	
 		/* stack pointer has to be word aligned */
 		if(((unsigned)esp) % 0x4 != 0){
-			printf("ERROR: esp % 4 not 0 - esp: %x\n",esp);
+			printf("ERROR: esp % 4 not 0 - esp: %x\n",(unsigned int) esp);
 		}
 
         /* copy seperator to stack */
