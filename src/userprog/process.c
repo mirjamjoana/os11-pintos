@@ -199,92 +199,40 @@ start_process (void * command_line_input)
 	
 			/* get address size */
 			size = sizeof(src);
-	
-			/* copy address */
-			memcpy(esp, src, size);
-			
-			if (j == 0) {
-				/* push argv (address of arguments[0]) on the stack */
-				src = esp;
-				
-				size = sizeof(src);
-		
-				esp -= size;
-
-				memcpy(esp, src, size);
-
-				/* assert argv[0] = argv */
-				//ASSERT(esp == &(esp + size));
-			}
 
 			/* decrement stack pointer */
 			esp -= size;
+	
+			/* copy address */
+			memcpy(esp, src, size);
 		}
 
-		/* push argc on the stack */
-		src = (const void *)argument_count;
-
-		size = sizeof(src);
-
-		memcpy(esp, src, size);
-		
-		/* decrement stack pointer */
+		/* push argv (address of arguments[0]) on the stack */
+		src = esp;
+		size = sizeof(char**);
 		esp -= size;
+		memcpy(esp, src, size);
+
+		/* push argc on the stack */
+		src = (const void *) &argument_count;
+		size = sizeof(int);
+		esp -= size;
+		memcpy(esp, src, size);
 		
 		/* push return address on the stack */
-		src = (const void *) 0;
-
-		size = sizeof(src);
-
+		int return_address = 0;
+		src = (const void *) &return_address;
+		size = sizeof(int);
+		esp -= size;
 		memcpy(esp, src, size);
-	
 
-// ---------------------------- TODO copy argument pointer + argv + argc + return address on stack
-		/*
-		  //create array of pointers to corresponding arguments
-		  for (j = 0; j < i; j++) {
-			   char *temp = strtok_r (arguments, " ", &copied_pointer);
-			   malloc(sizeof(temp));
-			   memcpy(copied_token, temp, sizeof(copied_token));
-			   values[j] = copied_token;
-			   pointer[j] = copied_pointer;
-		  }
-
-		  //word-alligned access
-		  if (sizeof(values) % 4 != 0) {
-			   esp -= (sizeof(values) % 4);
-		  }
-
-		  //allocate memory
-		  malloc(sizeof(values));
-
-		  // put arguments on the stack
-		  for (j = 0; j < i; j++) {
-			   *esp = values[j];
-			   esp -= 4;
-		  }
-
-		   // Null pointer sentinel
-		  *esp = NULL;
-		  esp -= 4;
-
-		  // put addresses on the stack
-		  for (j = i; j < 2*i +1; j++) {
-			   *esp = pointer[j];
-			   esp -= 4;
-		  }
-
-		   // fake return address
-		  *esp = void * ();
-		*/
+		/* free resources */
+		free(command_line_input_copy);
 	}
 
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
 	if (!success)
 		thread_exit ();
-
-  /************* INSERT CODE HERE *****************************/
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
