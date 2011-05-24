@@ -153,6 +153,7 @@ start_process (void * command_line_input)
 	
 		/* get stack pointer */
 		void* esp = if_.esp;
+		void* initial_esp = esp; /* debug */
 	
 		/* loop variables */
 		int j;
@@ -188,8 +189,9 @@ start_process (void * command_line_input)
 	
 		/* stack pointer has to be word aligned */
 		if(((unsigned)esp) % 0x4 != 0){
-			printf("ERROR: esp % 4 not 0 - esp: %x\n",(unsigned int) esp);
+			printf("ERROR: esp mod 4 not 0 - esp: %x\n", (unsigned int) esp);
 		}
+
 
         /* copy seperator to stack */
         esp -= 4;
@@ -230,6 +232,9 @@ start_process (void * command_line_input)
 		size = sizeof(int);
 		esp -= size;
 		memcpy(esp, src, size);
+
+		/* debugging */
+		hex_dump((uintptr_t) 0, esp, (unsigned) initial_esp - (unsigned) esp, true);
 
 		/* free resources */
 		free(command_line_input_copy);
