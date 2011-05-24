@@ -20,6 +20,8 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 
+#define MAX_FILE_NAME_LENGTH 16
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 struct thread* process_get_thread(tid_t tid);
@@ -30,20 +32,8 @@ struct child* process_get_child(tid_t child_tid);
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *args) 
 {
-	/*
-	parse arguments
-	char s[] = "  String to  tokenize. ";
-	char *token, *save_ptr;
-
-	for (token = strtok_r (s, " ", &save_ptr); token != NULL;
-        	token = strtok_r (NULL, " ", &save_ptr))
-	{
-		//put token on stack and save pointer
-	}
-
-	*/
   char *fn_copy;
   tid_t tid;
 
@@ -52,10 +42,19 @@ process_execute (const char *file_name)
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_copy, args, PGSIZE);
+
+  /* extract file name */
+  char file_name[MAX_FILE_NAME_LENGTH];
+  char* cp = args;
+  int count = 0;
+  while(*cp != '\0' && *cp != ' ' && count < MAX_FILE_NAME_LENGTH){
+	  *(cp++) = *(args++);
+	  count++;
+  }
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create ((const char*)&file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
 
@@ -158,7 +157,6 @@ start_process (void * command_line_input)
 	
 		/* get stack pointer */
 		void* esp = if_.esp;
-
 		void* initial_esp = esp; /* debug */
 
 		/* loop variables */
@@ -195,10 +193,12 @@ start_process (void * command_line_input)
 	
 		/* stack pointer has to be word aligned */
 		if(((unsigned)esp) % 0x4 != 0){
+
 			printf("ERROR: esp mod 4 = %i - esp: %x\n",(unsigned) esp % 4, (unsigned int) esp);
+
 		}
 
-	        /* copy seperator to stack */
+		/* copy seperator to stack */
 		esp -= 4;
 		uint32_t seperator = 0x0;
 		memcpy(esp, (void *)&seperator, sizeof(uint32_t));
