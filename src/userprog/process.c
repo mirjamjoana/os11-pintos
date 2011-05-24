@@ -111,7 +111,10 @@ start_process (void * command_line_input)
 
    /* assert that the command line input
       has not changed over time */
-   ASSERT(i == argument_count);
+   if(i != argument_count){
+	   printf("ERROR: argument size differs! a: %u <> b: %u\n", i, argument_count);
+	   thread_exit();
+   }
 
    /* load file begin */
 	char *file_name = arguments[0];
@@ -184,7 +187,9 @@ start_process (void * command_line_input)
 		}
 	
 		/* stack pointer has to be word aligned */
-		ASSERT(((unsigned)esp) % 4 == 0);
+		if(((unsigned)esp) % 0x4 != 0){
+			printf("ERROR: esp % 4 not 0 - esp: %x\n",esp);
+		}
 
         /* copy seperator to stack */
         esp -= 4;
