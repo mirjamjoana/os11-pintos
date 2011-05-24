@@ -61,6 +61,7 @@ static struct lock filesystem_lock; /* mutex semaphore for filesystem */
 void
 syscall_init (void) 
 {
+	printf("Restiger syscall handler.");	
 	lock_init(&filesystem_lock);
 	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
