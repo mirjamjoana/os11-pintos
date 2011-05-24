@@ -32,6 +32,18 @@ struct child* process_get_child(tid_t child_tid);
 tid_t
 process_execute (const char *file_name) 
 {
+	/*
+	parse arguments
+	char s[] = "  String to  tokenize. ";
+	char *token, *save_ptr;
+
+	for (token = strtok_r (s, " ", &save_ptr); token != NULL;
+        	token = strtok_r (NULL, " ", &save_ptr))
+	{
+		//put token on stack and save pointer
+	}
+
+	*/
   char *fn_copy;
   tid_t tid;
 
@@ -105,20 +117,20 @@ start_process (void * command_line_input)
 	char *file_name = arguments[0];
 	struct intr_frame if_;
 	bool success;
-
+	
 	/* Initialize interrupt frame and load executable. */
 	memset (&if_, 0, sizeof if_);
 	if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
 	if_.cs = SEL_UCSEG;
 	if_.eflags = FLAG_IF | FLAG_MBS;
 	success = load (file_name, &if_.eip, &if_.esp);
-
-
+	
+	
 	/* if load was successful */
 	if(success){
-
+	
 		/* EXAMPLE STACK
-
+	
 			Address 	Name 			Data 		Type
 			0xbffffffc 	argv[3][...] 	"bar\0" 	char[4]
 			0xbffffff8 	argv[2][...] 	"foo\0" 	char[4]
@@ -133,46 +145,84 @@ start_process (void * command_line_input)
 			0xbfffffd4 	argv 			0xbfffffd8 	char **
 			0xbfffffd0 	argc 			4 			int
 			0xbfffffcc 	return address 	0 			void (*) ()
+	
+			*/
+	
+		/* get stack pointer */
+		void* esp = if_.esp;
+	
+		/* loop variables */
+		int j;
+		const void * src;
+		unsigned size;
+	
+		/* copy arguments on stack in reversed order */
+		for (j = argument_count; j >= 0; j--)
+		{
+			/* fetch argument pointer */
+			src = (const void *) arguments[j];
+	
+			/* get argument size */
+			size = strlen((const char*)src);
+	
+			/* decrement stack pointer */
+			esp -= size;
+	
+			/* store argument stack pointer */
+			arguments[j] = esp;
+	
+			/* copy argument */
+			memcpy(esp, src, size);
+		}
+	
+		/* check if stack pointer is word aligned */
+		unsigned fragmentation = ((unsigned) esp) % 4;
+		if(fragmentation != 0)
+		{
+			/* if not, make it! */
+			esp -= 4 - fragmentation;
+		}
+	
+		/* stack pointer has to be word aligned */
+		ASSERT(((unsigned)esp) % 4 == 0);
 
-		   */
+		/* copy adresses on stack in reversed order */
+		for (j = argument_count; j >= 0; j--)
+		{
+			/* fetch adress pointer */
+			src = (const void *) arguments[j];
+	
+			/* get adress size */
+			size = sizeof(src);
+	
+			/* copy adress */
+			memcpy(esp, src, size);
+			
+			if (j == 0) {
+				/* push argv (address of arguments[0]) on the stack */
+				src = esp;
+				
+				size = sizeof(src);
+		
+				esp -= size;
 
-	  /* get stack pointer */
-	  void* esp = if_.esp;
+				memcpy(esp, src, size);
 
-	  /* loop variables */
-	  int j;
-	  const void * src;
-	  unsigned size;
+				/* assert argv[0] = argv */
+				//ASSERT(esp == &(esp + size));
+			}
 
-	  /* copy arguments on stack in reversed order */
-	  for (j = argument_count; j >= 0; j--)
-	  {
-		  /* fetch argument pointer */
-		  src = (const void *) arguments[j];
+			/* decrement stack pointer */
+			esp -= size;
+		}
 
-		  /* get argument size */
-		  size = strlen((const char*)src);
+		/* push argc on the stack */
+		src = (const void *)argument_count;
 
-		  /* decrement stack pointer */
-		  esp -= size;
+		size = sizeof(src);
 
-		  /* store argument stack pointer */
-		  arguments[j] = esp;
-
-		  /* copy argument */
-		  memcpy(esp, src, size);
-	  }
-
-	  /* check if stack pointer is word aligned */
-	  unsigned fragmentation = ((unsigned) esp) % 4;
-	  if(fragmentation != 0)
-	  {
-		  /* if not, make it! */
-		  esp -= 4 - fragmentation;
-	  }
-
-	  /* stack pointer has to be word aligned */
-	  ASSERT(((unsigned)esp) % 4 == 0);
+		memcpy(esp, src, size);
+	
 
 // ---------------------------- TODO copy argument pointer + argv + argc + return address on stack
 		/*
