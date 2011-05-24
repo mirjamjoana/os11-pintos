@@ -186,6 +186,11 @@ start_process (void * command_line_input)
 		/* stack pointer has to be word aligned */
 		ASSERT(((unsigned)esp) % 4 == 0);
 
+        /* copy seperator to stack */
+        esp -= 4;
+        unsigned seperator = 0;
+        memcpy(esp, (void *)&seperator, sizeof(unsigned));
+
 		/* copy addresses on stack in reversed order */
 		for (j = argument_count; j >= 0; j--)
 		{
