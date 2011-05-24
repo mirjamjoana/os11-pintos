@@ -186,16 +186,16 @@ start_process (void * command_line_input)
 		/* stack pointer has to be word aligned */
 		ASSERT(((unsigned)esp) % 4 == 0);
 
-		/* copy adresses on stack in reversed order */
+		/* copy addresses on stack in reversed order */
 		for (j = argument_count; j >= 0; j--)
 		{
-			/* fetch adress pointer */
+			/* fetch address pointer */
 			src = (const void *) arguments[j];
 	
-			/* get adress size */
+			/* get address size */
 			size = sizeof(src);
 	
-			/* copy adress */
+			/* copy address */
 			memcpy(esp, src, size);
 			
 			if (j == 0) {
@@ -218,6 +218,16 @@ start_process (void * command_line_input)
 
 		/* push argc on the stack */
 		src = (const void *)argument_count;
+
+		size = sizeof(src);
+
+		memcpy(esp, src, size);
+		
+		/* decrement stack pointer */
+		esp -= size;
+		
+		/* push return address on the stack */
+		src = (const void *) 0;
 
 		size = sizeof(src);
 
