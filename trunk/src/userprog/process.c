@@ -79,18 +79,22 @@ process_execute (const char *file_name)
 static void
 start_process (void * command_line_input)
 {
+	printf("COMMAND LINE INPUT: %s\n", (char*) command_line_input);
+
 	/* loop variables */
 	char *token, *save_ptr;
 
 	/* copy of the command line input */
-	void *command_line_input_copy = malloc(sizeof(command_line_input));
-	memcpy(command_line_input_copy, (const void*) command_line_input, sizeof(command_line_input));
+	void *command_line_input_copy = malloc(strlen(command_line_input) + 1);
+	memcpy(command_line_input_copy, (const void*) command_line_input, strlen((const char*)command_line_input) + 1);
 
    /* count number of arguments */
    int argument_count = 0;
    for (token = strtok_r ((char *)command_line_input_copy, " ", &save_ptr); token != NULL;
-        token = strtok_r (NULL, " ", &save_ptr))
+        token = strtok_r (NULL, " ", &save_ptr)){
 	   argument_count++;
+	   printf("token: %s\n", token);
+   }
 
    /* create appropriate number of argument pointers */
    char** arguments = malloc(argument_count * sizeof(char*));
@@ -105,6 +109,7 @@ start_process (void * command_line_input)
    for (token = strtok_r ((char *)command_line_input, " ", &save_ptr); token != NULL;
         token = strtok_r (NULL, " ", &save_ptr))
    {
+	   printf("token2: %s\n", token);
 	   arguments[i] = token;
 	   i++;
    }
@@ -153,21 +158,22 @@ start_process (void * command_line_input)
 	
 		/* get stack pointer */
 		void* esp = if_.esp;
+
 		void* initial_esp = esp; /* debug */
-	
+
 		/* loop variables */
 		int j;
 		const void * src;
 		unsigned size;
 	
 		/* copy arguments on stack in reversed order */
-		for (j = argument_count; j >= 0; j--)
+		for (j = argument_count - 1; j >= 0; j--)
 		{
 			/* fetch argument pointer */
 			src = (const void *) arguments[j];
 	
 			/* get argument size */
-			size = strlen((const char*)src);
+			size = strlen((const char*)src) + 1;
 	
 			/* decrement stack pointer */
 			esp -= size;
@@ -184,54 +190,40 @@ start_process (void * command_line_input)
 		if(fragmentation != 0)
 		{
 			/* if not, make it! */
-			esp -= 4 - fragmentation;
+			esp -= fragmentation;
 		}
 	
 		/* stack pointer has to be word aligned */
 		if(((unsigned)esp) % 0x4 != 0){
-			printf("ERROR: esp mod 4 not 0 - esp: %x\n", (unsigned int) esp);
+			printf("ERROR: esp mod 4 = %i - esp: %x\n",(unsigned) esp % 4, (unsigned int) esp);
 		}
 
-
-        /* copy seperator to stack */
-        esp -= 4;
-        unsigned seperator = 0;
-        memcpy(esp, (void *)&seperator, sizeof(unsigned));
+	        /* copy seperator to stack */
+		esp -= 4;
+		uint32_t seperator = 0x0;
+		memcpy(esp, (void *)&seperator, sizeof(uint32_t));
 
 		/* copy addresses on stack in reversed order */
-		for (j = argument_count; j >= 0; j--)
+		for (j = argument_count - 1; j >= 0; j--)
 		{
-			/* fetch address pointer */
-			src = (const void *) arguments[j];
-	
-			/* get address size */
-			size = sizeof(src);
+			/* decrement esp */
+			esp -= sizeof(uint32_t);
 
-			/* decrement stack pointer */
-			esp -= size;
-	
-			/* copy address */
-			memcpy(esp, src, size);
+			/* save argv pointer */
+			*((uint32_t *) esp) = (uint32_t) arguments[j];
 		}
 
 		/* push argv (address of arguments[0]) on the stack */
-		src = esp;
-		size = sizeof(char**);
-		esp -= size;
-		memcpy(esp, src, size);
+		esp -= sizeof(uint32_t);
+		*((uint32_t *) esp) = (uint32_t) esp + sizeof(uint32_t);
 
 		/* push argc on the stack */
-		src = (const void *) &argument_count;
-		size = sizeof(int);
-		esp -= size;
-		memcpy(esp, src, size);
-		
-		/* push return address on the stack */
-		int return_address = 0;
-		src = (const void *) &return_address;
-		size = sizeof(int);
-		esp -= size;
-		memcpy(esp, src, size);
+		esp -= sizeof(uint32_t);
+		*((uint32_t *) esp) = (uint32_t) argument_count;
+			
+		/* push return address on the stack */	
+		esp -= sizeof(uint32_t);
+		*((uint32_t *) esp) = (uint32_t) 0;
 
 		/* debugging */
 		hex_dump((uintptr_t) 0, esp, (unsigned) initial_esp - (unsigned) esp, true);
