@@ -29,7 +29,8 @@ None.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
-thread children etc.
+None.
+
 
 ---- ALGORITHMS ----
 
@@ -37,13 +38,36 @@ thread children etc.
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
 
+We implemented argument parsing by first counting the number of arguments.
+Then we allocate an array of appropriate size where we put pointers to 
+the parsed strings into it. This ensures that the first value in the array
+equals the first element of argv[]. After that, we try to load the file 
+which is given by argv[0]. If this is successful, we put the arguments
+in reversed order on the stack. Then we push the required sentinels on the 
+stack. Since we stored the addresses of the arguments when we put them on
+the stack, we can now easily put the addresses in reversed order on the stack.
+Finally the remaining values and addresses are pushed on the stack and
+we are done.
+TODO: STACK OVERFLOWING   
+
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
 
+The reason is that strtok() does not support multi-threading, whereas
+strtok_r() supports multithreading by storing information about the next
+token in the third argument (save_ptr). This makes it possible to reenter
+the string several times.
+
 >> A4: In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
+
+1) It is be easier to use different shell interfaces.
+2) It is an additional protection of the kernel if the shell interprets
+   the commands and invokes system calls. If the user has direct access 
+   to the kernel there could possibly be a chance to do some malicious
+   manipulations.
 
 			     SYSTEM CALLS
 			     ============
@@ -54,14 +78,51 @@ thread children etc.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Added to syscall.c:
+
+	static struct file* syscall_get_file(int file_descriptor);
+
+A filesystem_lock is used to protect the filesystem against unsynchronized 
+access.
+	static struct lock filesystem_lock;					 /* mutex semaphore for filesystem */
+
+
+	/* Members for implementing exit() */
+	struct thread *cur_thread = thread_current();				/* get current thread */
+	struct child *list_element = process_get_child(cur_thread->tid);	/* get child element of current thread */
+	struct thread *parent_thread = list_element->parent;			/* get parent thread */
+
+	/* Members for implementing open() */
+    	struct file *file = filesys_open(file_name);				/* open file */
+    	struct list* file_descriptors = &(thread_current()->file_descriptors);	/* fetch file descriptor list */
+	struct file_descriptor_elem *file_descriptor = (struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));							/* create new file descriptor for file file */
+
+Added to process.c:
+
+	struct thread* process_get_thread(tid_t tid);
+	struct child* process_get_child(tid_t child_tid);
+
+	*/ Member for implementing process_wait() */
+	struct child* child = process_get_child(child_tid);			/* find thread with id child_tid */
+
+	*/ Member for implementing process_get_child() */
+	struct list* children = &(thread_current()->children);			/* list of child threads */
+
+
+
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
+
+Each process keeps track of the files he has opened by managing a file-descriptor
+list. This is a datastructure which is unique within a single process.
 
 ---- ALGORITHMS ----
 
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
+
+TODO
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
@@ -70,8 +131,16 @@ thread children etc.
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
+TODO
+
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
+
+We implemented the wait system call bei calling process_wait() in process.c.
+We used a semaphore to indicate that a process is waiting on the child process.
+It is increased when the child process exits, whereas the waiting parent process
+waits on the semaphore until being woken up and then decreasing it.  By that we 
+ensure proper synchronization between parent and child processes.
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
@@ -87,12 +156,17 @@ thread children etc.
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
+TODO
+
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
 >> fails, so it cannot return before the new executable has completed
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
+
+This is ensured by assigning -1 as exit status to the child process from
+the very beginning. TODO
 
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
@@ -101,16 +175,28 @@ thread children etc.
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
 
+This is ensured by synchronizing both threads with a semaphore. P waits
+on the semaphore until C exits. This is the moment where P is being 
+signaled to wake up again. If C has already exited, the semaphore is
+free and P can call down() and go on. The resources of C are freed
+in the method process_exit(), which is called by C in every case.
+
 ---- RATIONALE ----
 
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
 
+TODO
+
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
 
+TODO
+
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
+
+We did not change it.
 
 			   SURVEY QUESTIONS
 			   ================
