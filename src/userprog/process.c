@@ -18,21 +18,18 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "threads/synch.h"
-
-#define MAX_FILE_NAME_LENGTH 16
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-struct thread* process_get_thread(tid_t tid);
 struct child* process_get_child(tid_t child_tid);
+
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *args) 
+process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
@@ -42,33 +39,14 @@ process_execute (const char *args)
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, args, PGSIZE);
-
-  /* extract file name */
-  char file_name[MAX_FILE_NAME_LENGTH];
-  char* cp = args;
-  int count = 0;
-  while(*cp != '\0' && *cp != ' ' && count < MAX_FILE_NAME_LENGTH){
-	  *(cp++) = *(args++);
-	  count++;
-  }
+  strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create ((const char*)&file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
 
-  /* create new child for children list */
-  struct child * c = (struct child *) malloc(sizeof(struct child));
-
-  /* initialize fields */
-  sema_init(&c->terminated, 0);
-  c->parent = thread_current();
-  c->exit_status = -1;
-  c->tid = tid;
-
-  /* add child process to children */
-  list_push_front(&thread_current()->children, &c->elem);
+  /* TODO add new child to list */
 
   return tid;
 }
@@ -76,174 +54,162 @@ process_execute (const char *args)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void * command_line_input)
+start_process (void *command_line_input)
 {
-	printf("COMMAND LINE INPUT: %s\n", (char*) command_line_input);
+    /* loop variables */
+    char *token, *save_ptr;
 
-	/* loop variables */
-	char *token, *save_ptr;
+    /* copy of the command line input */
+    void *command_line_input_copy = malloc(strlen(command_line_input) + 1);
+    memcpy(command_line_input_copy, (const void*) command_line_input, strlen((const char*)command_line_input) + 1);
 
-	/* copy of the command line input */
-	void *command_line_input_copy = malloc(strlen(command_line_input) + 1);
-	memcpy(command_line_input_copy, (const void*) command_line_input, strlen((const char*)command_line_input) + 1);
+	/* count number of arguments */
+	int argument_count = 0;
+	for (token = strtok_r ((char *)command_line_input_copy, " ", &save_ptr); token != NULL;
+		token = strtok_r (NULL, " ", &save_ptr)){
+		   argument_count++;
+		   printf("token: %s\n", token);
+	}
 
-   /* count number of arguments */
-   int argument_count = 0;
-   for (token = strtok_r ((char *)command_line_input_copy, " ", &save_ptr); token != NULL;
-        token = strtok_r (NULL, " ", &save_ptr)){
-	   argument_count++;
-	   printf("token: %s\n", token);
-   }
+	/* create array of argument pointers */
+	char** arguments = malloc(argument_count * sizeof(char*));
 
-   /* create appropriate number of argument pointers */
-   char** arguments = malloc(argument_count * sizeof(char*));
-   
-   /*
-    * save token pointers into arguments array
-    *
-    * arguments[0] => filename
-    * arguments[1..n] => argument 0 .. n-1
-    */
-   int i = 0;
-   for (token = strtok_r ((char *)command_line_input, " ", &save_ptr); token != NULL;
-        token = strtok_r (NULL, " ", &save_ptr))
-   {
-	   printf("token2: %s\n", token);
-	   arguments[i] = token;
-	   i++;
-   }
+	/*
+	* save token pointers into arguments array
+	*
+	* arguments[0] => filename
+	* arguments[1..n] => argument 0 .. n-1
+	*/
+	int i = 0;
+	for (token = strtok_r ((char *)command_line_input, " ", &save_ptr); token != NULL;
+		token = strtok_r (NULL, " ", &save_ptr))
+	{
+		   printf("token2: %s\n", token);
+		   arguments[i] = token;
+		   i++;
+	}
 
-   /* assert that the command line input
-      has not changed over time */
-   if(i != argument_count){
-	   printf("ERROR: argument size differs! a: %u <> b: %u\n", i, argument_count);
-	   thread_exit();
-   }
+	/* assert that the command line input
+	  has not changed over time */
+	ASSERT(argument_count == i);
 
-   /* load file begin */
 	char *file_name = arguments[0];
 	struct intr_frame if_;
 	bool success;
-	
+
 	/* Initialize interrupt frame and load executable. */
 	memset (&if_, 0, sizeof if_);
 	if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
 	if_.cs = SEL_UCSEG;
 	if_.eflags = FLAG_IF | FLAG_MBS;
 	success = load (file_name, &if_.eip, &if_.esp);
-	
-	
-	/* if load was successful */
-	if(success){
-	
-		/* EXAMPLE STACK
-	
-			Address 	Name 			Data 		Type
-			0xbffffffc 	argv[3][...] 	"bar\0" 	char[4]
-			0xbffffff8 	argv[2][...] 	"foo\0" 	char[4]
-			0xbffffff5 	argv[1][...] 	"-l\0" 		char[3]
-			0xbfffffed 	argv[0][...] 	"/bin/ls\0" char[8]
-			0xbfffffec 	word-align 		0 			uint8_t
-			0xbfffffe8 	argv[4] 		0 			char *
-			0xbfffffe4 	argv[3] 		0xbffffffc 	char *
-			0xbfffffe0 	argv[2] 		0xbffffff8 	char *
-			0xbfffffdc 	argv[1] 		0xbffffff5 	char *
-			0xbfffffd8 	argv[0] 		0xbfffffed 	char *
-			0xbfffffd4 	argv 			0xbfffffd8 	char **
-			0xbfffffd0 	argc 			4 			int
-			0xbfffffcc 	return address 	0 			void (*) ()
-	
-			*/
-	
-		/* get stack pointer */
-		void* esp = if_.esp;
-		void* initial_esp = esp; /* debug */
-
-		/* loop variables */
-		int j;
-		const void * src;
-		unsigned size;
-	
-		/* copy arguments on stack in reversed order */
-		for (j = argument_count - 1; j >= 0; j--)
-		{
-			/* fetch argument pointer */
-			src = (const void *) arguments[j];
-	
-			/* get argument size */
-			size = strlen((const char*)src) + 1;
-	
-			/* decrement stack pointer */
-			esp -= size;
-	
-			/* store argument stack pointer */
-			arguments[j] = esp;
-	
-			/* copy argument */
-			memcpy(esp, src, size);
-		}
-	
-		/* check if stack pointer is word aligned */
-		unsigned fragmentation = ((unsigned) esp) % 4;
-		if(fragmentation != 0)
-		{
-			/* if not, make it! */
-			esp -= fragmentation;
-		}
-	
-		/* stack pointer has to be word aligned */
-		if(((unsigned)esp) % 0x4 != 0){
-
-			printf("ERROR: esp mod 4 = %i - esp: %x\n",(unsigned) esp % 4, (unsigned int) esp);
-
-		}
-
-		/* copy seperator to stack */
-		esp -= 4;
-		uint32_t seperator = 0x0;
-		memcpy(esp, (void *)&seperator, sizeof(uint32_t));
-
-		/* copy addresses on stack in reversed order */
-		for (j = argument_count - 1; j >= 0; j--)
-		{
-			/* decrement esp */
-			esp -= sizeof(uint32_t);
-
-			/* save argv pointer */
-			*((uint32_t *) esp) = (uint32_t) arguments[j];
-		}
-
-		/* push argv (address of arguments[0]) on the stack */
-		esp -= sizeof(uint32_t);
-		*((uint32_t *) esp) = (uint32_t) esp + sizeof(uint32_t);
-
-		/* push argc on the stack */
-		esp -= sizeof(uint32_t);
-		*((uint32_t *) esp) = (uint32_t) argument_count;
-			
-		/* push return address on the stack */	
-		esp -= sizeof(uint32_t);
-		*((uint32_t *) esp) = (uint32_t) 0;
-
-		/* debugging */
-		hex_dump((uintptr_t) 0, esp, (unsigned) initial_esp - (unsigned) esp, true);
-
-		/* free resources */
-		free(command_line_input_copy);
-	}
 
 	/* If load failed, quit. */
+	palloc_free_page (file_name);
 	if (!success)
 		thread_exit ();
 
-  /* Start the user process by simulating a return from an
-     interrupt, implemented by intr_exit (in
-     threads/intr-stubs.S).  Because intr_exit takes all of its
-     arguments on the stack in the form of a `struct intr_frame',
-     we just point the stack pointer (%esp) to our stack frame
-     and jump to it. */
-  asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
-  NOT_REACHED ();
+    /* copy arguments on stack. example stack:
+     *
+	Address         Name			Data			Type
+	0xbffffffc      argv[3][...]    "bar\0"			char[4]
+	0xbffffff8      argv[2][...]    "foo\0"			char[4]
+	0xbffffff5      argv[1][...]    "-l\0"			char[3]
+	0xbfffffed      argv[0][...]    "/bin/ls\0"		char[8]
+	0xbfffffec      word-align      0				uint8_t
+	0xbfffffe8      argv[4]         0				char *
+	0xbfffffe4      argv[3]         0xbffffffc		char *
+	0xbfffffe0      argv[2]         0xbffffff8		char *
+	0xbfffffdc      argv[1]         0xbffffff5		char *
+	0xbfffffd8      argv[0]         0xbfffffed		char *
+	0xbfffffd4      argv            0xbfffffd8		char **
+	0xbfffffd0      argc            4				int
+	0xbfffffcc      return address  0				void (*) ()
+	*/
+	printf("Start copying arguments to stack.\n");
+
+    /* get stack pointer */
+    void* esp = if_.esp;
+    void* initial_esp = esp; /* debug */
+
+    /* loop variables */
+    int j;
+    const void * src;
+    unsigned size;
+
+    /* push argument values on stack */
+    for (j = argument_count - 1; j >= 0; j--)
+    {
+            /* fetch argument pointer */
+            src = (const void *) arguments[j];
+
+            /* get argument size */
+            size = strlen((const char*)src) + 1;
+
+            /* decrement stack pointer */
+            esp -= size;
+
+            /* store argument stack pointer */
+            arguments[j] = esp;
+
+            /* copy argument */
+            memcpy(esp, src, size);
+    }
+
+    /* check if stack pointer is word aligned */
+    unsigned fragmentation = ((unsigned) esp) % 4;
+    if(fragmentation != 0)
+    {
+            /* if not, make it! */
+            esp -= fragmentation;
+    }
+
+    /* stack pointer has to be word aligned */
+    ASSERT(((unsigned)esp) % 0x4 != 0);
+
+    /* copy separator to stack */
+    esp -= 4;
+    uint32_t seperator = 0x0;
+    memcpy(esp, (void *)&seperator, sizeof(uint32_t));
+
+    /* psuh argument addresses on stack */
+    for (j = argument_count - 1; j >= 0; j--)
+    {
+            /* decrement esp */
+            esp -= sizeof(uint32_t);
+
+            /* save argv pointer */
+            *((uint32_t *) esp) = (uint32_t) arguments[j];
+    }
+
+    /* push argv (address of arguments[0]) on the stack */
+    esp -= sizeof(uint32_t);
+    *((uint32_t *) esp) = (uint32_t) esp + sizeof(uint32_t);
+
+    /* push argc on the stack */
+    esp -= sizeof(uint32_t);
+    *((uint32_t *) esp) = (uint32_t) argument_count;
+
+    /* push return address on the stack */
+    esp -= sizeof(uint32_t);
+    *((uint32_t *) esp) = (uint32_t) 0;
+
+    printf("Finished copying arguments on stack.\n");
+
+    /* debugging */
+    hex_dump((uintptr_t) 0, esp, (unsigned) initial_esp - (unsigned) esp, true);
+
+    /* free resources */
+    free(command_line_input_copy);
+
+	/* Start the user process by simulating a return from an
+	 interrupt, implemented by intr_exit (in
+	 threads/intr-stubs.S).  Because intr_exit takes all of its
+	 arguments on the stack in the form of a `struct intr_frame',
+	 we just point the stack pointer (%esp) to our stack frame
+	 and jump to it. */
+	asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
+	NOT_REACHED ();
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -256,56 +222,12 @@ start_process (void * command_line_input)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid)
+process_wait (tid_t child_tid UNUSED)
 {
-	/* find thread with id child_tid */
-	struct child* child = process_get_child(child_tid);
-
-	/* if child exists and this is the parent thread */
-	if(child != NULL && child->parent == thread_current()) {
-
-		/* waits for child process to increase semaphore
-		   terminated on exit */
-		sema_down(&child->terminated);
-
-		/* fetch exit status from child */
-		int exit_status = child->exit_status;
-
-		/* remove terminated child from list */
-		list_remove(&(child->elem));
-		free(child);
-
-		/* return exit value */
-		return exit_status;
-
-	}
-	else {
-		return -1;
-	}
-}
-
-/*
- * Find child with id child_id.
- */
-struct child*
-process_get_child(tid_t child_tid)
-{
-	/* list of child threads */
-	struct list* children = &(thread_current()->children);
-
-	/* loop variables */
-	struct list_elem *e;
-	struct child *c = NULL;
-
-	/* search child with tid child_tid and return its termination semaphore */
-	for (e = list_begin (children); e != list_end (children); e = list_next (e))
-	{
-		c = list_entry (e, struct child, elem);
-		if(c->tid == child_tid) {
-			return c;
-		}
-	}
-	return NULL;
+  while (true)
+        {
+        // infinite loop
+        };
 }
 
 /* Free the current process's resources. */
@@ -314,22 +236,6 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-
-  /* close all open files and empty file list */
-  while (!list_empty (&(thread_current()->file_descriptors)))
-    {
-	  /* get current list element */
-      struct list_elem *e = list_pop_front (&(thread_current()->file_descriptors));
-
-      /* get file descriptor element */
-      struct file_descriptor_elem *fde = list_entry (e, struct file_descriptor_elem, elem);
-
-	  /* close file */
-	  file_close(fde->file);
-
-	  /* free file descriptor element */
-	  free(fde);
-  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -670,7 +576,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-    	  *esp = PHYS_BASE;
+        *esp = PHYS_BASE;
       else
         palloc_free_page (kpage);
     }
@@ -696,3 +602,28 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
+
+/*
+ * Find child with id child_id.
+ */
+struct child*
+process_get_child(tid_t child_tid)
+{
+        /* list of child threads */
+        struct list* children = &(thread_current()->children);
+
+        /* loop variables */
+        struct list_elem *e;
+        struct child *c = NULL;
+
+        /* search child with tid child_tid and return its termination semaphore */
+        for (e = list_begin (children); e != list_end (children); e = list_next (e))
+        {
+                c = list_entry (e, struct child, elem);
+                if(c->tid == child_tid) {
+                        return c;
+                }
+        }
+        return NULL;
+}
+
