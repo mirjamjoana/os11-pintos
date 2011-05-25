@@ -17,7 +17,7 @@
 #include "userprog/process.h"
 #endif
 
-#define DEBUG 1
+#define DEBUG 0 
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -193,6 +193,7 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
   t->wakeup_tick = -1;
+  t->parent = thread_current();
 
   if(DEBUG) printf("creating child. tid: %i\n", tid);
   /* create child for current thread */
@@ -350,10 +351,10 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
-  list_remove (&thread_current()->sleepelem);
+ //list_remove (&thread_current()->sleepelem);
 
   /* print exit message */
-  printf("%s: exit(%d)\n", thread_current()->name, thread_current()->status);
+  printf("%s: exit(%d)\n", thread_current()->name, thread_current()->exit_status);
 
   /* finalize current thread */
   thread_current ()->status = THREAD_DYING;
