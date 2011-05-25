@@ -270,7 +270,7 @@ process_wait (tid_t child_tid)
 		/* wait to decrement waiting semaphore */
 		sema_down(&child->terminated);
 
-		if(DEBUG_EXIT) printf("thread %i progesses. child %i has completed.\n", thread_current()->tid, child_tid);
+		if(DEBUG_EXIT) printf("thread %i progresses. child %i has completed.\n", thread_current()->tid, child_tid);
 		/* fetch exit status */
 		int exit_status = child->exit_status;
 
@@ -295,79 +295,78 @@ process_wait (tid_t child_tid)
 void
 process_exit (void)
 {
-  struct thread *cur = thread_current ();
-  uint32_t *pd;
+	struct thread *cur = thread_current ();
+	uint32_t *pd;
 
-/* try to get child element of current thread */
-  struct child *list_element = process_get_child(cur->parent, cur->tid);
-	
-  if(DEBUG_EXIT) printf("entering process exit - parent: %i - child: %i", cur->parent->tid, cur->tid);
+	/* close all open files and empty file list */
+	while(!list_empty(&thread_current()->file_descriptors))
+	{
+		/* get current list element */
+		struct list_elem *e = list_pop_front(&thread_current()->file_descriptors);
 
-  /* save changes to parent children list */
-  if(list_element != NULL)
-  {
-	  /* set exit status */
-	  list_element->exit_status = cur->exit_status;
+		/* get file descriptor element */
+		struct file_descriptor_elem *fde = list_entry(e, struct file_descriptor_elem, elem);
 
-	  /* increment termination semaphore */
-	  sema_up(&list_element->terminated);
+		/* close file */
+		file_close(fde->file);
 
-	  if(DEBUG_EXIT) printf("increased semaphore for process %i", cur->tid);
-  } else {
-	if(DEBUG_EXIT) printf("coult not find child element for process %s", cur->name);
-  }
+		/* remove element from list */
+		list_remove(&fde->elem);
 
-/* close all open files and empty file list */
-while(!list_empty(&thread_current()->file_descriptors))
-{
-	/* get current list element */
-	struct list_elem *e = list_pop_front(&thread_current()->file_descriptors);
+		/* free file descriptor element */
+		free(fde);
+	}
 
-	/* get file descriptor element */
-	struct file_descriptor_elem *fde = list_entry(e, struct file_descriptor_elem, elem);
+	/* close all open files and empty file list */
+	while(!list_empty(&thread_current()->children))
+	{
+		/* get current list element */
+		struct list_elem *e = list_pop_front(&thread_current()->children);
 
-	/* close file */
-	file_close(fde->file);
+		/* get child */
+		struct child *c = list_entry(e, struct child, elem);
 
-	/* remove element from list */
-	list_remove(&fde->elem);
+		/* remove child from list */
+		list_remove(&c->elem);
 
-	/* free file descriptor element */
-	free(fde);
-}
+		/* free file descriptor element */
+		free(c);
+	}
 
-/* close all open files and empty file list */
-while(!list_empty(&thread_current()->children))
-{
-	/* get current list element */
-	struct list_elem *e = list_pop_front(&thread_current()->children);
+	/* Destroy the current process's page directory and switch back
+	 to the kernel-only page directory. */
+	pd = cur->pagedir;
+	if (pd != NULL)
+	{
+		/* Correct ordering here is crucial.  We must set
+		cur->pagedir to NULL before switching page directories,
+		so that a timer interrupt can't switch back to the
+		process page directory.  We must activate the base page
+		directory before destroying the process's page
+		directory, or our active page directory will be one
+		that's been freed (and cleared). */
+		cur->pagedir = NULL;
+		pagedir_activate (NULL);
+		pagedir_destroy (pd);
+	}
 
-	/* get child */
-	struct child *c = list_entry(e, struct child, elem);
+	/* try to get child element of current thread */
+	struct child *list_element = process_get_child(cur->parent, cur->tid);
+	if(DEBUG_EXIT) printf("process exit - parent: %i - child: %i", cur->parent->tid, cur->tid);
 
-	/* remove child from list */
-	list_remove(&c->elem);
+	/* save changes to parent children list */
+	if(list_element != NULL)
+	{
+		/* set exit status */
+		list_element->exit_status = cur->exit_status;
 
-	/* free file descriptor element */
-	free(c);
-}
+		/* increment termination semaphore */
+		sema_up(&list_element->terminated);
 
-  /* Destroy the current process's page directory and switch back
-     to the kernel-only page directory. */
-  pd = cur->pagedir;
-  if (pd != NULL) 
-    {
-      /* Correct ordering here is crucial.  We must set
-         cur->pagedir to NULL before switching page directories,
-         so that a timer interrupt can't switch back to the
-         process page directory.  We must activate the base page
-         directory before destroying the process's page
-         directory, or our active page directory will be one
-         that's been freed (and cleared). */
-      cur->pagedir = NULL;
-      pagedir_activate (NULL);
-      pagedir_destroy (pd);
-    }
+		if(DEBUG_EXIT) printf("increased semaphore for process %i", cur->tid);
+	} else {
+		if(DEBUG_EXIT) printf("coult not find child element for process %s", cur->name);
+	}
 }
 
 /* Sets up the CPU for running user code in the current

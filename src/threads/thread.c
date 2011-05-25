@@ -342,6 +342,9 @@ thread_exit (void)
 {
   ASSERT (!intr_context ());
 
+  /* print exit message */
+  printf("%s: exit(%d)\n", thread_current()->name, thread_current()->exit_status);
+
 #ifdef USERPROG
   process_exit ();
 #endif
@@ -353,8 +356,7 @@ thread_exit (void)
   list_remove (&thread_current()->allelem);
  //list_remove (&thread_current()->sleepelem);
 
-  /* print exit message */
-  printf("%s: exit(%d)\n", thread_current()->name, thread_current()->exit_status);
+
 
   /* finalize current thread */
   thread_current ()->status = THREAD_DYING;
