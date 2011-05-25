@@ -15,7 +15,7 @@
 
 #define CONSOLE_BUFFER_SIZE 100
 #define MAX_OPEN_FILES 128
-#define DEBUG 1
+#define DEBUG 0 
 
 /* prototypes */
 static void syscall_handler (struct intr_frame *f);
@@ -62,7 +62,7 @@ void
 syscall_init (void) 
 {
 	lock_init(&filesystem_lock);
-	printf("Register syscall handler.\n");
+	if(DEBUG) printf("Register syscall handler.\n");
 	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -75,7 +75,17 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-	printf ("system call!\n");
+	if(DEBUG)
+	{
+		printf ("system call! hex dump for 4 words:\n");
+
+		hex_dump(0, f->esp, 0xf, true);
+
+		printf("syscall %i \n", *((uint32_t*) f->esp));
+		printf("arg0 fd - %i\n", *((uint32_t*) f->esp + 1));
+		printf("arg1 buffer* - %x\n", *((uint32_t*) f->esp + 2));
+		printf("arg2 size - %i\n", *((uint32_t*) f->esp + 3));
+	}
 
 	/* retrieve system call number 
 	and switch to corresponding method */
@@ -146,12 +156,15 @@ syscall_handler (struct intr_frame *f)
 static void
 handle_halt(struct intr_frame *f UNUSED)
 {
+	if(DEBUG) printf("halt\n");
 	halt();
 }
 
 static void
 handle_exit(struct intr_frame *f)
 {
+	if(DEBUG) printf("exit\n");
+
 	int *status = (int *) syscall_get_argument(f, 0); /* exit status */
 	
 	/* call exit */
@@ -161,6 +174,8 @@ handle_exit(struct intr_frame *f)
 static void
 handle_exec(struct intr_frame *f)
 {
+	if(DEBUG) printf("exec\n");
+
 	char* cmd_line = (char *) syscall_get_argument(f, 0); /* command line input */
 
 	/* switch to exec method and save process id pid */
@@ -173,6 +188,8 @@ handle_exec(struct intr_frame *f)
 static void
 handle_wait(struct intr_frame *f)
 {
+	if(DEBUG) printf("wait\n");
+
 	int *pid = (int *) syscall_get_argument(f, 0); /* process id */
 
 	/* wait for child process, if possible */
@@ -185,6 +202,8 @@ handle_wait(struct intr_frame *f)
 static void
 handle_create(struct intr_frame *f UNUSED)
 {
+	if(DEBUG) printf("create\n");
+
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
 	unsigned int* initial_size = (unsigned int*) syscall_get_argument(f, 1); /* initial file size */
 
@@ -205,6 +224,8 @@ handle_create(struct intr_frame *f UNUSED)
 static void
 handle_remove(struct intr_frame *f)
 {
+	if(DEBUG) printf("remove\n");
+
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
 
 	/* acquire file system lock */
@@ -223,6 +244,8 @@ handle_remove(struct intr_frame *f)
 static void
 handle_open(struct intr_frame *f)
 {
+	if(DEBUG) printf("open\n");
+
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
 
 	/* acquire file system lock */
@@ -241,6 +264,8 @@ handle_open(struct intr_frame *f)
 static void
 handle_filesize(struct intr_frame *f)
 {
+	if(DEBUG) printf("filesize\n");
+
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 
 	/* acquire file system lock */
@@ -259,6 +284,8 @@ handle_filesize(struct intr_frame *f)
 static void
 handle_read(struct intr_frame *f)
 {
+	if(DEBUG) printf("read\n");
+
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	void * buffer = (void *) syscall_get_argument(f, 1); /* target buffer pointer */
 	unsigned int size = (unsigned int) syscall_get_argument(f, 2); /* target buffer size */
@@ -279,6 +306,8 @@ handle_read(struct intr_frame *f)
 static void
 handle_write(struct intr_frame *f)
 {
+	if(DEBUG) printf("wirte\n");
+
 	int fd = *((int*)syscall_get_argument(f, 0)); /* file descriptor */
 	const void *buffer = (const void*) syscall_get_argument(f, 1); /* target buffer pointer */
 	unsigned size = *((unsigned int*)syscall_get_argument(f, 2)); /* target buffer size */
@@ -299,6 +328,8 @@ handle_write(struct intr_frame *f)
 static void
 handle_seek(struct intr_frame *f)
 {
+	if(DEBUG) printf("seek\n");
+
 	int fd = *((int*)syscall_get_argument(f, 0)); /* file descriptor */
 	unsigned position = *((unsigned int*)syscall_get_argument(f, 1)); /* file position */
 
@@ -315,6 +346,8 @@ handle_seek(struct intr_frame *f)
 static void
 handle_tell(struct intr_frame *f)
 {
+	if(DEBUG) printf("tell\n");
+
 	int fd = *((int*)syscall_get_argument(f, 0)); /* file descriptor */
 
 	/* acquire file system lock */
@@ -331,8 +364,10 @@ handle_tell(struct intr_frame *f)
 }
 	
 static void handle_close(struct intr_frame *f UNUSED) {
-	lock_acquire(&filesystem_lock);
+	if(DEBUG) printf("close\n");
 
+	lock_acquire(&filesystem_lock);
+	/* TODO implement */
 	lock_release(&filesystem_lock);
 }
 	
@@ -374,16 +409,16 @@ exit (int status)
 	struct child *list_element = process_get_child(cur_thread->tid);
 
 	/* get parent thread */
-	struct thread *parent_thread = list_element->parent;
+//	struct thread *parent_thread = list_element->parent;
 
 	/* if thread has a parent thread, save exit status */
-	if (parent_thread != NULL)
+	if (false /*parent_thread != NULL*/)
 	{
 		 /* set exit status */
-		list_element->exit_status = status;
+		//list_element->exit_status = status;
 
 		/* set termination semaphore */
-		sema_up(&list_element->terminated);
+		//sema_up(&list_element->terminated);
 	}
 
 	/* print exit message */
@@ -718,7 +753,9 @@ static void *
 syscall_get_argument(const struct intr_frame *f, unsigned int arg_number)
 {
 	/* virtual address of argument arg_number */
-	uint32_t *user_address_arg = ((uint32_t*) f->esp ) + (arg_number + 1) * sizeof(void *);
+	uint32_t *user_address_arg = ((uint32_t*) f->esp + arg_number + 1);
+
+	if(DEBUG) printf("computed user argument %i address %x from esp base %x\n", arg_number, (uint32_t)user_address_arg , (uint32_t) f->esp);
 
 	/* fetch and return kernel address of argument arg_number */
 	return syscall_get_kernel_address(user_address_arg);
@@ -731,7 +768,8 @@ syscall_get_argument(const struct intr_frame *f, unsigned int arg_number)
 static void
 syscall_set_return_value (struct intr_frame *f, int ret_value)
 {
-	*((int*)f->eax) = ret_value;
+	if(DEBUG) printf("save return value in eax register @ %x", (uint32_t) f->eax);
+	f->eax = ret_value;
 }
 
 /*
