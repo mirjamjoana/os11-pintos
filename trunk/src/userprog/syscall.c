@@ -602,7 +602,10 @@ read(int fd, void *buffer, unsigned size)
 
 	/* read size bytes into buffer and
 	 * return actually read bytes */
-	return (int) file_read(f, buffer, (off_t) size);
+	if(f != NULL)
+		return (int) file_read(f, buffer, (off_t) size);
+
+	return -1;
 }
 
 /*
