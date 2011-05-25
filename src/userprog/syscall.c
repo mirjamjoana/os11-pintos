@@ -679,9 +679,8 @@ write (int fd, const void *buffer, unsigned size)
 			}
 			else {
 				/* no fitting file desciptor found, panic! */
-				printf("No such file descriptor: %i\n", fd);
-
-				//TODO ? return to handler and terminate process
+				if(DEBUG) printf("No such file descriptor: %i\n", fd);
+				return -1;
 			}
 		}
 	}
