@@ -60,17 +60,16 @@ start_process (void *command_line_input)
     char *token, *save_ptr;
 
     /* copy of the command line input */
-    void *command_line_input_copy = malloc(strlen(command_line_input) + 1);
-    memcpy(command_line_input_copy, (const void*) command_line_input, strlen((const char*)command_line_input) + 1);
+    void *command_line_input_copy = malloc(strlen(command_line_input) + sizeof(char));
+    memcpy(command_line_input_copy, (const void*) command_line_input, strlen((const char*)command_line_input) + sizeof(char));
 
 	/* count number of arguments */
 	int argument_count = 0;
-	for (token = strtok_r ((char *)command_line_input_copy, " ", &save_ptr); token != NULL;
+	for (token = strtok_r ((char *)command_line_input, " ", &save_ptr); token != NULL;
 		token = strtok_r (NULL, " ", &save_ptr)){
-		   argument_count++;
-		   printf("token: %s\n", token);
+		   argument_count++;		
 	}
-
+	
 	/* create array of argument pointers */
 	char** arguments = malloc(argument_count * sizeof(char*));
 
@@ -81,11 +80,12 @@ start_process (void *command_line_input)
 	* arguments[1..n] => argument 0 .. n-1
 	*/
 	int i = 0;
-	for (token = strtok_r ((char *)command_line_input, " ", &save_ptr); token != NULL;
+	for (token = strtok_r ((char *)command_line_input_copy, " ", &save_ptr); token != NULL;
 		token = strtok_r (NULL, " ", &save_ptr))
 	{
-		   printf("token2: %s\n", token);
+		   //printf("token %i: %s @ %x [%i bytes]\n", i, token, (unsigned)token, strlen(token));
 		   arguments[i] = token;
+		   //printf("token %i: %s @ %x [%i bytes] -- CHECK\n", i, arguments[i], (unsigned)arguments[i], strlen(arguments[i]));
 		   i++;
 	}
 
@@ -93,7 +93,7 @@ start_process (void *command_line_input)
 	  has not changed over time */
 	ASSERT(argument_count == i);
 
-	char *file_name = arguments[0];
+	char *file_name = (char *)command_line_input;
 	struct intr_frame if_;
 	bool success;
 
@@ -105,7 +105,7 @@ start_process (void *command_line_input)
 	success = load (file_name, &if_.eip, &if_.esp);
 
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
+	palloc_free_page (command_line_input);
 	if (!success)
 		thread_exit ();
 
@@ -142,12 +142,14 @@ no argument:
     void* initial_esp = esp; /* debug */
 
 
-    printf("Start copying %i arguments to stack. ESP: %x\n", argument_count, (unsigned) esp);
+  //  printf("Start copying %i arguments to stack. ESP: %x\n", argument_count, (unsigned) esp);
 
     /* loop variables */
     int j;
     const void * src;
     unsigned size;
+
+//    printf("push argument values\n");
 
     /* push argument values on stack */
     for (j = argument_count - 1; j >= 0; j--)
@@ -156,15 +158,17 @@ no argument:
             src = (const void *) arguments[j];
 
             /* get argument size */
-            size = strlen((const char*)src) + 1;
+            size = strlen(arguments[j]) + 1;
 
             /* decrement stack pointer */
             esp -= size;
 
             /* store argument stack pointer */
             arguments[j] = esp;
-
-            /* copy argument */
+		
+	   // printf("copying %i bytes from  %x to %x\n", size, (unsigned) src, (unsigned) esp);
+            
+	    /* copy argument */
             memcpy(esp, src, size);
     }
 
@@ -177,8 +181,9 @@ no argument:
     }
 
     /* stack pointer has to be word aligned */
-    ASSERT(((unsigned)esp) % 0x4 != 0);
+    ASSERT(((unsigned)esp) % 0x4 == 0);
 
+//    printf("copy sparator\n");
     /* copy separator to stack */
     esp -= 4;
     uint32_t seperator = 0x0;
@@ -206,10 +211,13 @@ no argument:
     esp -= sizeof(uint32_t);
     *((uint32_t *) esp) = (uint32_t) 0;
 
-    printf("Finished copying arguments on stack.\n");
+//    printf("Finished copying arguments on stack.\n");
 
     /* debugging */
     hex_dump((uintptr_t) 0, esp, (unsigned) initial_esp - (unsigned) esp, true);
+
+    /* update frame esp */
+    if_.esp = esp;
 
     /* free resources */
     free(command_line_input_copy);
