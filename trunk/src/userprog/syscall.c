@@ -40,7 +40,7 @@ static void* syscall_get_argument(const struct intr_frame *f, unsigned int arg_n
 static void syscall_set_return_value (struct intr_frame *f, int ret_value);
 static void* syscall_get_kernel_address (const void *uaddr);
 static struct file* syscall_get_file(int file_descriptor);
-
+static void syscall_check_pointer(const void * ptr);
 
 void halt (void);
 void exit (int status);
@@ -180,7 +180,8 @@ handle_exec(struct intr_frame *f)
 
 	char* cmd_line = (char *) syscall_get_argument(f, 0); /* command line input */
 
-	syscall_check_pointer(cmd_line);
+	/* check pointer */
+	syscall_check_pointer((const void *)cmd_line);
 
 	/* switch to exec method and save process id pid */
 	int pid = exec(cmd_line);
@@ -209,7 +210,7 @@ handle_create(struct intr_frame *f UNUSED)
 	if(DEBUG) printf("create\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
-	syscall_check_pointer(file);	/* check the file */
+	syscall_check_pointer((const void *) file);	/* check the file */
 	
 	unsigned int initial_size = (unsigned int) syscall_get_argument(f, 1); /* initial file size */
 
@@ -233,7 +234,7 @@ handle_remove(struct intr_frame *f)
 	if(DEBUG) printf("remove\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
-	syscall_check_pointer(file);	/* check the file */
+	syscall_check_pointer((const void *)file);	/* check the file */
 
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
@@ -254,7 +255,7 @@ handle_open(struct intr_frame *f)
 	if(DEBUG) printf("open\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
-	syscall_check_pointer(file);	/* check the file */
+	syscall_check_pointer((const void *) file);	/* check the file */
 
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
@@ -295,6 +296,7 @@ handle_read(struct intr_frame *f)
 	if(DEBUG) printf("read\n");
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
+	
 	void * buffer = (void *) syscall_get_argument(f, 1); /* target buffer pointer */
 	syscall_check_pointer(buffer);	/* check the buffer */
 
@@ -319,6 +321,7 @@ handle_write(struct intr_frame *f)
 	if(DEBUG) printf("write\n");
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
+	
 	const void *buffer = (const void*) syscall_get_argument(f, 1); /* target buffer pointer */
 	syscall_check_pointer(buffer);	/* check the buffer */
 
@@ -398,7 +401,8 @@ static void
 handle_no_such_syscall(struct intr_frame *f UNUSED)
 {
 	unsigned int syscall_number = *( (unsigned int*) f->esp);
-	printf("No such system call: %i.\n", syscall_number);
+	if(DEBUG) printf("No such system call: %i.\n", syscall_number);
+	thread_current()->exit_status = -1;
 	thread_exit();
 }
 
@@ -786,10 +790,10 @@ syscall_set_return_value (struct intr_frame *f, int ret_value)
 }
 
 /* Checks whether any given pointer is valid */
-void
-syscall_check_pointer (const void *uaddr) 
+static void
+syscall_check_pointer (const void *ptr) 
 {
-	syscall_get_kernel_address(uaddr);
+	syscall_get_kernel_address(ptr);
 }
 
 
