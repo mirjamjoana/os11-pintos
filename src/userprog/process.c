@@ -214,7 +214,7 @@ no argument:
 //    printf("Finished copying arguments on stack.\n");
 
     /* debugging */
-    hex_dump((uintptr_t) 0, esp, (unsigned) initial_esp - (unsigned) esp, true);
+    //hex_dump((uintptr_t) 0, esp, (unsigned) initial_esp - (unsigned) esp, true);
 
     /* update frame esp */
     if_.esp = esp;
@@ -244,10 +244,31 @@ no argument:
 int
 process_wait (tid_t child_tid UNUSED)
 {
-  while (true)
-        {
-        // infinite loop
-        };
+	/* get child element */
+	struct child *child = process_get_child(thread_current()->tid);
+	
+	/* if child is still active, wait for process completion */
+	if(child != NULL && child->parent == thread_current())
+	{
+		/* wait to decrement waiting semaphore */
+		sema_down(&child->terminated);
+
+		/* fetch exit status */
+		int exit_status = child->exit_status;
+
+		/* remove terminated child from list */
+		list_remove(&child->elem);
+		
+		/* free resources */
+		free(child);
+
+		/* return exit status */
+		return exit_status;
+
+	} else {
+		/* no child */
+		return -1;
+	}
 }
 
 /* Free the current process's resources. */
@@ -256,6 +277,54 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+/* try to get child element of current thread */
+  struct child *list_element = process_get_child(thread_current()->tid);
+
+  /* save changes to parent children list */
+  if(list_element != NULL)
+  {
+	  /* set exit status */
+	  list_element->exit_status = thread_current()->exit_status;
+
+	  /* increment termination semaphore */
+	  sema_up(&list_element->terminated);
+  }
+
+/* close all open files and empty file list */
+while(!list_empty(&thread_current()->file_descriptors))
+{
+	/* get current list element */
+	struct list_elem *e = list_pop_front(&thread_current()->file_descriptors);
+
+	/* get file descriptor element */
+	struct file_descriptor_elem *fde = list_entry(e, struct file_descriptor_elem, elem);
+
+	/* close file */
+	file_close(fde->file);
+
+	/* remove element from list */
+	list_remove(&fde->elem);
+
+	/* free file descriptor element */
+	free(fde);
+}
+
+/* close all open files and empty file list */
+while(!list_empty(&thread_current()->children))
+{
+	/* get current list element */
+	struct list_elem *e = list_pop_front(&thread_current()->children);
+
+	/* get child */
+	struct child *c = list_entry(e, struct child, elem);
+
+	/* remove child from list */
+	list_remove(&c->elem);
+
+	/* free file descriptor element */
+	free(c);
+}
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

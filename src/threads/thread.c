@@ -17,6 +17,8 @@
 #include "userprog/process.h"
 #endif
 
+#define DEBUG 1
+
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -192,6 +194,16 @@ thread_create (const char *name, int priority,
   tid = t->tid = allocate_tid ();
   t->wakeup_tick = -1;
 
+  if(DEBUG) printf("creating child. tid: %i\n", tid);
+  /* create child for current thread */
+  struct child* c = (struct child*) malloc(sizeof(struct child));
+  c->parent = thread_current();
+  c->tid = tid;
+  sema_init(&c->terminated, 0);
+
+  /* add child process to children list */
+  list_push_front(&thread_current()->children, &c->elem);
+
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack'
      member cannot be observed. */
@@ -340,19 +352,10 @@ thread_exit (void)
   list_remove (&thread_current()->allelem);
   list_remove (&thread_current()->sleepelem);
 
-  /* empty child list */
-  while (!list_empty (&(thread_current()->children)))
-    {
-	  /* get current list element */
-      struct list_elem *e = list_pop_front (&(thread_current()->children));
+  /* print exit message */
+  printf("%s: exit(%d)\n", thread_current()->name, thread_current()->status);
 
-      /* get child */
-      struct child *c = list_entry (e, struct child, elem);
-
-	  /* free file descriptor element */
-	  free(c);
-  }
-
+  /* finalize current thread */
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
