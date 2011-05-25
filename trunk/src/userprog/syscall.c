@@ -488,6 +488,11 @@ wait (int pid)
 bool
 create (const char *file, unsigned initial_size)
 {
+	if(file == NULL){
+		thread_current()->exit_status = -1;
+		thread_exit();
+	}
+
 	/* create file called file with initial size initial_size*/
 	return filesys_create(file, initial_size);
 }
