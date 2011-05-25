@@ -125,12 +125,24 @@ start_process (void *command_line_input)
 	0xbfffffd4      argv            0xbfffffd8		char **
 	0xbfffffd0      argc            4				int
 	0xbfffffcc      return address  0				void (*) ()
+
+no argument:
+	Address         Name			Data			Type
+	0xbffffff0      argv[0][...]    "args-none\0"	char[8]
+	0xbfffffec      word-align      0				uint8_t
+	0xbfffffdc      argv[1]         0				char *
+	0xbfffffd8      argv[0]         0xbfffffed		char *
+	0xbfffffd4      argv            0xbfffffd8		char **
+	0xbfffffd0      argc            1				int
+	0xbfffffcc      return address  0				void (*) ()
 	*/
-	printf("Start copying arguments to stack.\n");
 
     /* get stack pointer */
     void* esp = if_.esp;
     void* initial_esp = esp; /* debug */
+
+
+    printf("Start copying %i arguments to stack. ESP: %x\n", argument_count, (unsigned) esp);
 
     /* loop variables */
     int j;
