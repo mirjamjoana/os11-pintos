@@ -168,7 +168,7 @@ handle_exit(struct intr_frame *f)
 	if(DEBUG) printf("exit\n");
 
 	int status = (int) syscall_get_argument(f, 0); /* exit status */
-	
+
 	/* call exit */
 	exit(status);
 }
@@ -179,6 +179,8 @@ handle_exec(struct intr_frame *f)
 	if(DEBUG) printf("exec\n");
 
 	char* cmd_line = (char *) syscall_get_argument(f, 0); /* command line input */
+
+	check_pointer(cmd_line);
 
 	/* switch to exec method and save process id pid */
 	int pid = exec(cmd_line);
@@ -207,6 +209,8 @@ handle_create(struct intr_frame *f UNUSED)
 	if(DEBUG) printf("create\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
+	check_pointer(file);	/* check the file */
+	
 	unsigned int initial_size = (unsigned int) syscall_get_argument(f, 1); /* initial file size */
 
 	/* acquire file system lock */
@@ -229,6 +233,7 @@ handle_remove(struct intr_frame *f)
 	if(DEBUG) printf("remove\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
+	check_pointer(file);	/* check the file */
 
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
@@ -249,6 +254,7 @@ handle_open(struct intr_frame *f)
 	if(DEBUG) printf("open\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
+	check_pointer(file);	/* check the file */
 
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
@@ -290,6 +296,8 @@ handle_read(struct intr_frame *f)
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	void * buffer = (void *) syscall_get_argument(f, 1); /* target buffer pointer */
+	check_pointer(buffer);	/* check the buffer */
+
 	unsigned int size = (unsigned int) syscall_get_argument(f, 2); /* target buffer size */
 
 	/* acquire file system lock */
@@ -312,6 +320,8 @@ handle_write(struct intr_frame *f)
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	const void *buffer = (const void*) syscall_get_argument(f, 1); /* target buffer pointer */
+	check_pointer(buffer);	/* check the buffer */
+
 	unsigned size = (unsigned int) syscall_get_argument(f, 2); /* target buffer size */
 
 	if(DEBUG) {
@@ -774,6 +784,14 @@ syscall_set_return_value (struct intr_frame *f, int ret_value)
 	if(DEBUG) printf("save return value in eax register @ %x\n", (uint32_t) f->eax);
 	f->eax = ret_value;
 }
+
+/* Checks whether any given pointer is valid */
+void
+syscall_check_pointer (const void *uaddr) 
+{
+	syscall_get_kernel_address(uaddr));
+}
+
 
 /*
  * Gets the kernel virtual space address of user space
