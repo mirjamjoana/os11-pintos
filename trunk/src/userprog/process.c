@@ -31,7 +31,7 @@ struct child* process_get_child(struct thread* parent, tid_t child_tid);
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name)
+process_execute (const char *command_line_input)
 {
 	char *fn_copy;
 	tid_t tid;
@@ -42,10 +42,15 @@ process_execute (const char *file_name)
 	if (fn_copy == NULL)
 		return TID_ERROR;
 
-	strlcpy (fn_copy, file_name, PGSIZE);
+	strlcpy (fn_copy, command_line_input, PGSIZE);
 
-	char * dummy;
-	strtok_r(file_name, " ", &dummy); 
+	/* make another copy of the file name */
+    char *file_name = (char *) malloc(strlen(command_line_input) + sizeof(char));
+    strlcpy(file_name, command_line_input, strlen(command_line_input) + sizeof(char));
+
+	/* extract file name */
+	char * save_ptr;
+	strtok_r(file_name, " ", &save_ptr);
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
