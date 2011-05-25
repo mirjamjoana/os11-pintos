@@ -63,7 +63,7 @@ the string several times.
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
 
-1) It is be easier to use different shell interfaces.
+1) It is easier to use different shell interfaces.
 2) It is an additional protection of the kernel if the shell interprets
    the commands and invokes system calls. If the user has direct access 
    to the kernel there could possibly be a chance to do some malicious
@@ -95,7 +95,8 @@ access.
 	/* Members for implementing open() */
     	struct file *file = filesys_open(file_name);				/* open file */
     	struct list* file_descriptors = &(thread_current()->file_descriptors);	/* fetch file descriptor list */
-	struct file_descriptor_elem *file_descriptor = (struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));							/* create new file descriptor for file file */
+	struct file_descriptor_elem *file_descriptor = 
+	(struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));	/* create new file descriptor for file file */
 
 Added to process.c:
 
@@ -122,7 +123,12 @@ list. This is a datastructure which is unique within a single process.
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
 
-TODO
+To implement reading and writing user data correctly, we chose to implement
+the first solution how it was described in the assignment. In the method
+syscall_get_kernel_address() we check the validity of a pointer that we got
+from a user process. We check whether the pointer points to unmapped or non-user
+memory or is a nullpointer. Finally we used the preimplemented method pagedir_get_page()
+to lookup the user virtual address.
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
@@ -186,7 +192,11 @@ in the method process_exit(), which is called by C in every case.
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
 
-TODO
+We chose to first check the validity of a user pointer before 
+dereferencing it because this makes it easier to handle the release of 
+locks and allocated memory afterwards. As already pointed out in the 
+assignment, you need not to worry about how to return from a page fault. 
+So we chose the easier and a bit slower technique.
 
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
