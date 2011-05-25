@@ -15,7 +15,7 @@
 
 #define CONSOLE_BUFFER_SIZE 100
 #define MAX_OPEN_FILES 128
-#define DEBUG 0 
+#define DEBUG 1 
 
 /* prototypes */
 static void syscall_handler (struct intr_frame *f);
@@ -165,10 +165,10 @@ handle_exit(struct intr_frame *f)
 {
 	if(DEBUG) printf("exit\n");
 
-	int *status = (int *) syscall_get_argument(f, 0); /* exit status */
+	int status = (int) syscall_get_argument(f, 0); /* exit status */
 	
 	/* call exit */
-	exit(*status);
+	exit(status);
 }
 
 static void
@@ -190,10 +190,10 @@ handle_wait(struct intr_frame *f)
 {
 	if(DEBUG) printf("wait\n");
 
-	int *pid = (int *) syscall_get_argument(f, 0); /* process id */
+	int pid = (int) syscall_get_argument(f, 0); /* process id */
 
 	/* wait for child process, if possible */
-	int exit_value = wait(*pid);
+	int exit_value = wait(pid);
 
 	/* return the exit value */
 	syscall_set_return_value(f, exit_value);
@@ -306,11 +306,15 @@ handle_read(struct intr_frame *f)
 static void
 handle_write(struct intr_frame *f)
 {
-	if(DEBUG) printf("wirte\n");
+	if(DEBUG) printf("write\n");
 
-	int fd = *((int*)syscall_get_argument(f, 0)); /* file descriptor */
+	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	const void *buffer = (const void*) syscall_get_argument(f, 1); /* target buffer pointer */
-	unsigned size = *((unsigned int*)syscall_get_argument(f, 2)); /* target buffer size */
+	unsigned size = (unsigned int) syscall_get_argument(f, 2); /* target buffer size */
+
+	if(DEBUG) {
+		printf("fd: %i  buffer: %x  size: %i\n", fd, (uint32_t) buffer, size);
+	}
 
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
@@ -330,8 +334,8 @@ handle_seek(struct intr_frame *f)
 {
 	if(DEBUG) printf("seek\n");
 
-	int fd = *((int*)syscall_get_argument(f, 0)); /* file descriptor */
-	unsigned position = *((unsigned int*)syscall_get_argument(f, 1)); /* file position */
+	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
+	unsigned position = (unsigned int) syscall_get_argument(f, 1); /* file position */
 
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
@@ -348,7 +352,7 @@ handle_tell(struct intr_frame *f)
 {
 	if(DEBUG) printf("tell\n");
 
-	int fd = *((int*)syscall_get_argument(f, 0)); /* file descriptor */
+	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
@@ -401,28 +405,8 @@ halt (void)
 void
 exit (int status)
 {
-
-	/* get current thread */
-	struct thread *cur_thread = thread_current();
-
-	/* get child element of current thread */
-	struct child *list_element = process_get_child(cur_thread->tid);
-
-	/* get parent thread */
-//	struct thread *parent_thread = list_element->parent;
-
-	/* if thread has a parent thread, save exit status */
-	if (false /*parent_thread != NULL*/)
-	{
-		 /* set exit status */
-		//list_element->exit_status = status;
-
-		/* set termination semaphore */
-		//sema_up(&list_element->terminated);
-	}
-
-	/* print exit message */
-	printf ("%s: exit(%d)\n", cur_thread->name, status);
+	/* save exit status */
+	thread_current()->exit_status = status;
 
 	/* exit and delete thread */
 	thread_exit();
@@ -543,13 +527,13 @@ open (const char *file_name)
     }
 
     /* fetch file descriptor list */
-    struct list* file_descriptors = &(thread_current()->file_descriptors);
+    struct list* file_descriptors = &thread_current()->file_descriptors;
 
     /* if there is space left */
     if(list_size(file_descriptors) < MAX_OPEN_FILES)
     {
     	/* create new file descriptor for file file */
-		struct file_descriptor_elem *file_descriptor = (struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));
+	struct file_descriptor_elem *file_descriptor = (struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));
 
     	/* set & increase file descriptor number */
     	file_descriptor->file_descriptor = thread_current()->fd_next_id++;
@@ -558,10 +542,10 @@ open (const char *file_name)
     	file_descriptor->file = file;
 
     	/* insert new file descriptor into descriptor list */
-		list_push_front(file_descriptors, &(file_descriptor->elem));
+	list_push_front(file_descriptors, &file_descriptor->elem);
 
-		return file_descriptor->file_descriptor;
-	}
+	return file_descriptor->file_descriptor;
+    }
     else
     {
     	return -1;
@@ -632,7 +616,7 @@ write (int fd, const void *buffer, unsigned size)
 				/* split buffer in chunks of
 				 * CONSOLE_BUFFER_SIZE large buffers */
 
-				void * buffer_pointer = (void *) buffer;
+				void * buffer_pointer =  (void *) buffer;
 
 				unsigned i;
 				for(i = 0; i < size; i += CONSOLE_BUFFER_SIZE)
@@ -641,10 +625,14 @@ write (int fd, const void *buffer, unsigned size)
 					writing_count += CONSOLE_BUFFER_SIZE;
 				}
 
-
-
 			} else {
+			
+				if(DEBUG) printf("BUFFER located at 32:%x\n", (uint32_t) buffer);
+
+				if(DEBUG) hex_dump(0, buffer, size, true);
+
 				/* write buffer as it is to console */
+				if(DEBUG) printf("putting stuff on user console: %s\n", (const char*) buffer);
 				putbuf((const char *)buffer, size);
 				writing_count += size;
 			}
@@ -669,8 +657,7 @@ write (int fd, const void *buffer, unsigned size)
 				/* no fitting file desciptor found, panic! */
 				printf("No such file descriptor: %i\n", fd);
 
-				//TODO return to handler and terminate process
-				thread_exit();
+				//TODO ? return to handler and terminate process
 			}
 		}
 	}
@@ -740,7 +727,11 @@ close (int fd)
 
 			/* remove child from list */
 			list_remove(&(fde->elem));
-			// delete fde->file_descriptor ?
+			
+			/* free resources */
+		       	free(fde);
+
+			break;
 		}
 	}
 }
@@ -758,7 +749,7 @@ syscall_get_argument(const struct intr_frame *f, unsigned int arg_number)
 	if(DEBUG) printf("computed user argument %i address %x from esp base %x\n", arg_number, (uint32_t)user_address_arg , (uint32_t) f->esp);
 
 	/* fetch and return kernel address of argument arg_number */
-	return syscall_get_kernel_address(user_address_arg);
+	return (void *) *((uint32_t*)syscall_get_kernel_address(user_address_arg));
 }
 
 /*
@@ -768,7 +759,7 @@ syscall_get_argument(const struct intr_frame *f, unsigned int arg_number)
 static void
 syscall_set_return_value (struct intr_frame *f, int ret_value)
 {
-	if(DEBUG) printf("save return value in eax register @ %x", (uint32_t) f->eax);
+	if(DEBUG) printf("save return value in eax register @ %x\n", (uint32_t) f->eax);
 	f->eax = ret_value;
 }
 
