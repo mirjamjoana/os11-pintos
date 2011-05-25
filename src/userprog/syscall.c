@@ -502,11 +502,6 @@ wait (int pid)
 bool
 create (const char *file, unsigned initial_size)
 {
-	if(file == NULL){
-		thread_current()->exit_status = -1;
-		thread_exit();
-	}
-
 	/* create file called file with initial size initial_size*/
 	return filesys_create(file, initial_size);
 }
@@ -824,7 +819,15 @@ syscall_get_kernel_address (const void *uaddr)
 		thread_exit();
 	}
 	else
-		return pagedir_get_page(pd, uaddr);
+	{
+		/* fetch pointer */
+		void * address = pagedir_get_page(pd, uaddr);
+		if(address != NULL)
+			return address;
+
+		current_thread->exit_status = -1;
+		thread_exit();
+	}
 }
 
 /*
