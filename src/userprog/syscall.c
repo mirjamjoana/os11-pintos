@@ -795,9 +795,9 @@ syscall_get_kernel_address (const void *uaddr)
 	}
 
 	/* Checks whether UADDR points to unmapped memory and whether it is a user address */
-	else if ( uaddr < (void *) 0x08084000 /* - 64 * 1024 * 1024 */ || uaddr >= PHYS_BASE)
+	else if ( uaddr < (void *) 0x08048000 /* - 64 * 1024 * 1024 */ || uaddr >= PHYS_BASE)
 	{
-		if(DEBUG) printf("Segmentation fault.\n");
+		if(DEBUG) printf("Segmentation fault @ %x\n", (uint32_t) uaddr);
 		current_thread->exit_status = -1;
 		thread_exit();
 	}
