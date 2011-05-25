@@ -15,7 +15,8 @@
 
 #define CONSOLE_BUFFER_SIZE 100
 #define MAX_OPEN_FILES 128
-#define DEBUG 1 
+#define DEBUG 0 
+#define DEBUG_PUTBUF 0
 
 /* prototypes */
 static void syscall_handler (struct intr_frame *f);
@@ -611,7 +612,7 @@ write (int fd, const void *buffer, unsigned size)
 		case STDOUT_FILENO: { /* System console, stdio.h */
 
 			/* split too large buffer */
-			if(size > CONSOLE_BUFFER_SIZE)
+			if(false && size > CONSOLE_BUFFER_SIZE)
 			{
 				/* split buffer in chunks of
 				 * CONSOLE_BUFFER_SIZE large buffers */
@@ -626,13 +627,11 @@ write (int fd, const void *buffer, unsigned size)
 				}
 
 			} else {
-			
-				if(DEBUG) printf("BUFFER located at 32:%x\n", (uint32_t) buffer);
 
-				if(DEBUG) hex_dump(0, buffer, size, true);
+				if(DEBUG_PUTBUF) hex_dump(0, buffer, size, true);
 
 				/* write buffer as it is to console */
-				if(DEBUG) printf("putting stuff on user console: %s\n", (const char*) buffer);
+				if(DEBUG_PUTBUF) printf("putting stuff on user console: %s\n", (const char*) buffer);
 				putbuf((const char *)buffer, size);
 				writing_count += size;
 			}

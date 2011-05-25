@@ -19,9 +19,11 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#define DEBUG_EXIT 0
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-struct child* process_get_child(tid_t child_tid);
+struct child* process_get_child(struct thread* parent, tid_t child_tid);
 
 
 /* Starts a new thread running a user program loaded from
@@ -59,8 +61,9 @@ process_execute (const char *file_name)
 	/* add child process to children */
 	list_push_front(&thread_current()->children, &c->elem);
 
+	if(DEBUG_EXIT) printf("Added child %i to thread %i\n", tid, thread_current()->tid);
 
-  return tid;
+	return tid;
 }
 
 /* A thread function that loads a user process and starts it
@@ -254,17 +257,20 @@ no argument:
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED)
+process_wait (tid_t child_tid)
 {
 	/* get child element */
-	struct child *child = process_get_child(thread_current()->tid);
-	
+	struct child *child = process_get_child(thread_current(), child_tid);
+
+	if(DEBUG_EXIT) printf("thread %i waiting for %i to complete ...\n", thread_current()->tid, child_tid);
+
 	/* if child is still active, wait for process completion */
 	if(child != NULL && child->parent == thread_current())
 	{
 		/* wait to decrement waiting semaphore */
 		sema_down(&child->terminated);
 
+		if(DEBUG_EXIT) printf("thread %i progesses. child %i has completed.\n", thread_current()->tid, child_tid);
 		/* fetch exit status */
 		int exit_status = child->exit_status;
 
@@ -278,6 +284,8 @@ process_wait (tid_t child_tid UNUSED)
 		return exit_status;
 
 	} else {
+
+		if(DEBUG_EXIT) printf("thread %i progesses. no such child exists.\n", thread_current()->tid);
 		/* no child */
 		return -1;
 	}
@@ -291,16 +299,22 @@ process_exit (void)
   uint32_t *pd;
 
 /* try to get child element of current thread */
-  struct child *list_element = process_get_child(thread_current()->tid);
+  struct child *list_element = process_get_child(cur->parent, cur->tid);
+	
+  if(DEBUG_EXIT) printf("entering process exit - parent: %i - child: %i", cur->parent->tid, cur->tid);
 
   /* save changes to parent children list */
   if(list_element != NULL)
   {
 	  /* set exit status */
-	  list_element->exit_status = thread_current()->exit_status;
+	  list_element->exit_status = cur->exit_status;
 
 	  /* increment termination semaphore */
 	  sema_up(&list_element->terminated);
+
+	  if(DEBUG_EXIT) printf("increased semaphore for process %i", cur->tid);
+  } else {
+	if(DEBUG_EXIT) printf("coult not find child element for process %s", cur->name);
   }
 
 /* close all open files and empty file list */
@@ -708,10 +722,12 @@ install_page (void *upage, void *kpage, bool writable)
  * Find child with id child_id.
  */
 struct child*
-process_get_child(tid_t child_tid)
+process_get_child(struct thread* parent, tid_t child_tid)
 {
+	if(DEBUG_EXIT) printf("searchin child %i in parent %i - ", (unsigned) child_tid, parent->tid);
+
         /* list of child threads */
-        struct list* children = &(thread_current()->children);
+        struct list* children = &(parent->children);
 
         /* loop variables */
         struct list_elem *e;
@@ -721,10 +737,17 @@ process_get_child(tid_t child_tid)
         for (e = list_begin (children); e != list_end (children); e = list_next (e))
         {
                 c = list_entry (e, struct child, elem);
-                if(c->tid == child_tid) {
-                        return c;
+
+		if(DEBUG_EXIT)printf("|%i-%i| ", c->tid, child_tid);
+
+		if(c->tid == child_tid) {
+                        if(DEBUG_EXIT) printf("found.\n");
+			return c;
                 }
         }
+
+	if(DEBUG_EXIT) printf("not found.\n");
+
         return NULL;
 }
 
