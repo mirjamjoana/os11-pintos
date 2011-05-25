@@ -31,22 +31,34 @@ struct child* process_get_child(tid_t child_tid);
 tid_t
 process_execute (const char *file_name)
 {
-  char *fn_copy;
-  tid_t tid;
+	char *fn_copy;
+	tid_t tid;
 
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
-    return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+	/* Make a copy of FILE_NAME.
+	 Otherwise there's a race between the caller and load(). */
+	fn_copy = palloc_get_page (0);
+	if (fn_copy == NULL)
+		return TID_ERROR;
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy);
+	strlcpy (fn_copy, file_name, PGSIZE);
 
-  /* TODO add new child to list */
+	/* Create a new thread to execute FILE_NAME. */
+	tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+	if (tid == TID_ERROR)
+		palloc_free_page (fn_copy);
+
+	/* create new child for children list */
+	struct child * c = (struct child *) malloc(sizeof(struct child));
+
+	/* initialize fields */
+	sema_init(&c->terminated, 0);
+	c->parent = thread_current();
+	c->exit_status = -1;
+	c->tid = tid;
+
+	/* add child process to children */
+	list_push_front(&thread_current()->children, &c->elem);
+
 
   return tid;
 }
