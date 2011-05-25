@@ -76,6 +76,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
+
 	if(DEBUG)
 	{
 		printf ("system call! hex dump for 4 words:\n");
@@ -90,7 +91,7 @@ syscall_handler (struct intr_frame *f)
 
 	/* retrieve system call number 
 	and switch to corresponding method */
-	unsigned int syscall_number = *( (unsigned int*) f->esp);
+	unsigned int syscall_number = *((unsigned int*) syscall_get_kernel_address(f->esp));
 
 	switch(syscall_number)
 	{
@@ -777,15 +778,15 @@ syscall_get_kernel_address (const void *uaddr)
 	if (pd == NULL || uaddr == NULL)
 	{
 		if(DEBUG) printf("Null pointer.\n");
-		printf ("%s: exit(%d)\n", thread_name(),-1);
+		current_thread->exit_status = -1;
 		thread_exit();
 	}
 
 	/* Checks whether UADDR points to unmapped memory and whether it is a user address */
-	else if ( uaddr <= (void *) 0x08084000 /* - 64 * 1024 * 1024 */ || uaddr >= PHYS_BASE)
+	else if ( uaddr < (void *) 0x08084000 /* - 64 * 1024 * 1024 */ || uaddr >= PHYS_BASE)
 	{
 		if(DEBUG) printf("Segmentation fault.\n");
-		printf ("%s: exit(%d)\n", thread_name(),-1);
+		current_thread->exit_status = -1;
 		thread_exit();
 	}
 	else
