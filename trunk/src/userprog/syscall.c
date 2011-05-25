@@ -254,13 +254,13 @@ handle_open(struct intr_frame *f)
 	lock_acquire(&filesystem_lock);
 
 	/* remove file and save success */
-	bool success = open(file);
+	int handle = open(file);
 
 	/* release file system lock */
 	lock_release(&filesystem_lock);
 
 	/* return success */
-	syscall_set_return_value(f, (int) success);
+	syscall_set_return_value(f, handle);
 }
 
 static void
@@ -366,7 +366,7 @@ handle_tell(struct intr_frame *f)
 	lock_release(&filesystem_lock);
 
 	/* return position */
-	syscall_set_return_value(f, position);
+	syscall_set_return_value(f, (int) position);
 }
 	
 static void handle_close(struct intr_frame *f UNUSED) {
@@ -547,7 +547,7 @@ open (const char *file_name)
     if(list_size(file_descriptors) < MAX_OPEN_FILES)
     {
     	/* create new file descriptor for file file */
-	struct file_descriptor_elem *file_descriptor = (struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));
+    	struct file_descriptor_elem *file_descriptor = (struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));
 
     	/* set & increase file descriptor number */
     	file_descriptor->file_descriptor = thread_current()->fd_next_id++;
@@ -556,9 +556,9 @@ open (const char *file_name)
     	file_descriptor->file = file;
 
     	/* insert new file descriptor into descriptor list */
-	list_push_front(file_descriptors, &file_descriptor->elem);
+		list_push_front(file_descriptors, &file_descriptor->elem);
 
-	return file_descriptor->file_descriptor;
+		return file_descriptor->file_descriptor;
     }
     else
     {
