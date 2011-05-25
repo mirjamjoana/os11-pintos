@@ -207,13 +207,13 @@ handle_create(struct intr_frame *f UNUSED)
 	if(DEBUG) printf("create\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
-	unsigned int* initial_size = (unsigned int*) syscall_get_argument(f, 1); /* initial file size */
+	unsigned int initial_size = (unsigned int) syscall_get_argument(f, 1); /* initial file size */
 
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
 
 	/* create file and save success */
-	bool success = create(file, *initial_size);
+	bool success = create(file, initial_size);
 
 	/* release file system lock */
 	lock_release(&filesystem_lock);
@@ -372,8 +372,15 @@ handle_tell(struct intr_frame *f)
 static void handle_close(struct intr_frame *f UNUSED) {
 	if(DEBUG) printf("close\n");
 
+	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
+
+	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
-	/* TODO implement */
+
+	/* fetch position of file fd */
+	close(fd);
+
+	/* release file system lock */
 	lock_release(&filesystem_lock);
 }
 	
