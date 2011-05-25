@@ -150,7 +150,7 @@ ensure proper synchronization between parent and child processes.
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
->> process to be terminated.  System calls are fraught with such
+>> process to be terminated. System calls are fraught with such
 >> accesses, e.g. a "write" system call requires reading the system
 >> call number from the user stack, then each of the call's three
 >> arguments, then an arbitrary amount of user memory, and any of
@@ -162,7 +162,21 @@ ensure proper synchronization between parent and child processes.
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
-TODO
+Let us consider the "write" system call as an example. We first implemented
+a method "handle_write()" which calls the method syscall_get_kernel_address()
+(via syscall_get_argument()), which checks the validity of the user address 
+and will then return the three arguments. If any of those fail, we TODO TODO
+TODO. 
+Next, we try to acquire the lock that protects the file system before we 
+allocate memory. If the file descriptor is the console, we put the bytes that 
+should be written into a buffer. If it should be written to a file, we look up 
+the matching file descriptor. If no matching file descriptor could be found, 
+cancel the write call (?? TODO TODO TODO). 
+We have tried to do the error handling by letting each method do the relevant
+tests, e.g. syscall_get_arguments() does not check the user pointer, since this is
+implicitly done by syscall_get_kernel_address(), that is called by syscall_get_
+arguments(). So we interleaved the error handling and by that provided hopefully 
+well readable code.
 
 ---- SYNCHRONIZATION ----
 
@@ -201,7 +215,10 @@ So we chose the easier and a bit slower technique.
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
 
-TODO
+We designed file descriptors as property of a thread. It uses this struct
+to manage all open files. An advantage of this design is that the kernel
+could also access the file descriptors list, e.g. if the process has to
+be killed due to an error. The kernel could then free those resources.
 
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
