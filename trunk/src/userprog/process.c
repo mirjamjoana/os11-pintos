@@ -19,7 +19,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-#define DEBUG_EXIT 0
+#define DEBUG_EXIT 0 
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -373,9 +373,16 @@ process_exit (void)
 		if(DEBUG_EXIT) printf("coult not find child element for process %s", cur->name);
 	}
 
+
+	if(DEBUG_EXIT) printf(">>>>>>>>>>>>>>>>>>>>>>>>>>>> TRY TO CLOSE FILE\n");
 	/* end executable file protection */
-	if(cur->executable != NULL)
+	if(cur->executable != NULL){
+		if(DEBUG_EXIT) printf("closing executable file\n");
+		file_allow_write(cur->executable);
 		file_close(cur->executable);
+	} else {
+		if(DEBUG_EXIT) printf("FILE NOT FOUND\n");
+	}
 }
 
 /* Sets up the CPU for running user code in the current
@@ -579,8 +586,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   * deny writes on the file if everthing's fine. */
   if(!success)
 	  file_close (file);
-  else
+  else {
+	  t->executable = file;
 	  file_deny_write(file);
+  }
 
   return success;
 }
