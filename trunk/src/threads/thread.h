@@ -118,6 +118,9 @@ struct child
   {
     struct list_elem elem;				/* list dummy */
 
+    struct semaphore initialized;		/* waiting semaphore for thread creation */
+    bool init_success;					/* states if the initialization has been a success */
+
     struct thread* parent;				/* parent thread */
     struct semaphore terminated;		/* synchronization semaphore for process wait */
     tid_t tid;							/* thread id */

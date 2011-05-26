@@ -57,20 +57,6 @@ process_execute (const char *command_line_input)
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 
-	/* create new child for children list */
-	struct child * c = (struct child *) malloc(sizeof(struct child));
-
-	/* initialize fields */
-	sema_init(&c->terminated, 0);
-	c->parent = thread_current();
-	c->exit_status = -1;
-	c->tid = tid;
-
-	/* add child process to children */
-	list_push_front(&thread_current()->children, &c->elem);
-
-	if(DEBUG_EXIT) printf("Added child %i to thread %i\n", tid, thread_current()->tid);
-
 	return tid;
 }
 
@@ -129,8 +115,10 @@ start_process (void *command_line_input)
 
 	/* If load failed, quit. */
 	palloc_free_page (command_line_input);
-	if (!success)
+	if (!success) {
 		thread_exit ();
+	}
+
 
     /* copy arguments on stack. example stack:
      *
@@ -244,6 +232,11 @@ no argument:
 
     /* free resources */
     free(command_line_input_copy);
+
+    /* initialization complete */
+   	struct child * c = process_get_child(thread_current()->parent, thread_current()->tid);
+    c->init_success = true;
+    sema_up(&c->initialized);
 
 	/* Start the user process by simulating a return from an
 	 interrupt, implemented by intr_exit (in
@@ -367,6 +360,9 @@ process_exit (void)
 	{
 		/* set exit status */
 		list_element->exit_status = cur->exit_status;
+
+		/* increment semaphore initialized */
+		sema_up(&list_element->initialized);
 
 		/* increment termination semaphore */
 		sema_up(&list_element->terminated);
