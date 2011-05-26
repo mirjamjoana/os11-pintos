@@ -95,7 +95,7 @@ struct thread
     struct list_elem sleepelem;			/* List element for sleeping threads list. */
 
     bool is_user_thread;				/* flag if current thread is a user thread */
-    struct thread * parent;			/* parent of the this thread */
+    struct thread * parent;				/* parent of the this thread */
     struct list children;				/* List of children (including exit status). */
     struct list file_descriptors;		/* List of file descriptors. */
     unsigned int fd_next_id;			/* Consecutively numbered identifier for file descriptors */
@@ -174,5 +174,6 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 struct list* thread_get_threads(void);
+struct child* thread_get_child(struct thread * parent, tid_t child_id);
 
 #endif /* threads/thread.h */
