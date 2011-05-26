@@ -29,7 +29,17 @@ None.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
-None.
+struct thread:
+	bool is_user_thread - states if thread is a user thread
+	file * executable - file link to the threads code on disk
+	thread * parent	- parent of the thread
+	list children -	child list
+	list file_descriptors - list of open files
+	uint fd_next_id - next fd id 
+	
+struct child - child element saved in the children list, including all information about the child process
+
+struct file_descriptor_elem - file descriptor element for the fd list, includes all information necessary for file handling
 
 
 ---- ALGORITHMS ----
@@ -48,7 +58,9 @@ stack. Since we stored the addresses of the arguments when we put them on
 the stack, we can now easily put the addresses in reversed order on the stack.
 Finally the remaining values and addresses are pushed on the stack and
 we are done.
-TODO: STACK OVERFLOWING   
+
+If an overflow occurs, a page fault exits the current thread. We limit the 
+space accessible with our functions.
 
 ---- RATIONALE ----
 
@@ -137,7 +149,8 @@ to lookup the user virtual address.
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
-TODO
+At least 2 calls - first and last address of the page.
+Maximum: for every word.
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
@@ -165,19 +178,16 @@ ensure proper synchronization between parent and child processes.
 Let us consider the "write" system call as an example. We first implemented
 a method "handle_write()" which calls the method syscall_get_kernel_address()
 (via syscall_get_argument()), which checks the validity of the user address 
-and will then return the three arguments. If any of those fail, we TODO TODO
-TODO. 
+and will then return the three also checked argument pointers/values. If any 
+of those fail, we exit the program by calling thread_exit(), which includes
+the printout you wished, and releasing system locks and resources.
+ 
 Next, we try to acquire the lock that protects the file system before we 
 allocate memory. If the file descriptor is the console, we put the bytes that 
 should be written into a buffer. If it should be written to a file, we look up 
 the matching file descriptor. If no matching file descriptor could be found, 
-cancel the write call (?? TODO TODO TODO). 
-We have tried to do the error handling by letting each method do the relevant
-tests, e.g. syscall_get_arguments() does not check the user pointer, since this is
-implicitly done by syscall_get_kernel_address(), that is called by syscall_get_
-arguments(). So we interleaved the error handling and by that provided hopefully 
-well readable code.
-
+cancel the write call.
+ 
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
@@ -185,8 +195,9 @@ well readable code.
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
 
-This is ensured by assigning -1 as exit status to the child process from
-the very beginning. TODO
+We implemented a sempaphore waiting. Until the thread started has not
+finished its loading step, the caller is not able to continue. If 
+the load is not succesfull, the caller is informed.
 
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
