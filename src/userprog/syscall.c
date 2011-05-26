@@ -57,12 +57,11 @@ unsigned tell (int fd);
 void close (int fd);
 
 /* global variables */
-static struct lock filesystem_lock; /* mutex semaphore for filesystem */
+extern struct lock filesystem_lock; /* mutex semaphore for filesystem */
 
 void
 syscall_init (void) 
 {
-	lock_init(&filesystem_lock);
 	if(DEBUG) printf("Register syscall handler.\n");
 	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
@@ -195,6 +194,9 @@ handle_wait(struct intr_frame *f)
 static void
 handle_create(struct intr_frame *f UNUSED)
 {
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
 	if(DEBUG) printf("create\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
@@ -202,85 +204,86 @@ handle_create(struct intr_frame *f UNUSED)
 	
 	unsigned int initial_size = (unsigned int) syscall_get_argument(f, 1); /* initial file size */
 
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
-
 	/* create file and save success */
 	bool success = create(file, initial_size);
 
-	/* release file system lock */
-	lock_release(&filesystem_lock);
-
 	/* return success */
 	syscall_set_return_value(f, (int) success);
+
+	/* release file system lock */
+	lock_release(&filesystem_lock);
 
 }
 	
 static void
 handle_remove(struct intr_frame *f)
 {
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
 	if(DEBUG) printf("remove\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
 	syscall_check_pointer((const void *)file);	/* check the file */
 
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
-
 	/* remove file and save success */
 	bool success = remove(file);
 
-	/* release file system lock */
-	lock_release(&filesystem_lock);
-
 	/* return success */
 	syscall_set_return_value(f, (int) success);
+
+	/* release file system lock */
+	lock_release(&filesystem_lock);
 }
 	
 static void
 handle_open(struct intr_frame *f)
 {
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
 	if(DEBUG) printf("open\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
 	syscall_check_pointer((const void *) file);	/* check the file */
 
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
-
 	/* remove file and save success */
 	int handle = open(file);
 
-	/* release file system lock */
-	lock_release(&filesystem_lock);
-
 	/* return success */
 	syscall_set_return_value(f, handle);
+
+	/* release file system lock */
+	lock_release(&filesystem_lock);
 }
 
 static void
 handle_filesize(struct intr_frame *f)
 {
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
 	if(DEBUG) printf("filesize\n");
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
-
 	/* fetch size */
 	int size = filesize(fd);
+
+	/* return size */
+	syscall_set_return_value(f, size);
 
 	/* release file system lock */
 	lock_release(&filesystem_lock);
 
-	/* return size */
-	syscall_set_return_value(f, size);
 }
 	
 static void
 handle_read(struct intr_frame *f)
 {
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
 	if(DEBUG) printf("read\n");
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
@@ -290,24 +293,24 @@ handle_read(struct intr_frame *f)
 
 	unsigned int size = (unsigned int) syscall_get_argument(f, 2); /* target buffer size */
 
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
-
 	/* read file and save read count */
 	int read_count = read(fd, buffer, size);
+
+	/* return size */
+	syscall_set_return_value(f, read_count);
 
 	/* release file system lock */
 	lock_release(&filesystem_lock);
 
-	/* return size */
-	syscall_set_return_value(f, read_count);
 }
 	
 static void
 handle_write(struct intr_frame *f)
 {
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
-	
 	const void *buffer = (const void*) syscall_get_argument(f, 1); /* target buffer pointer */
 	syscall_check_pointer(buffer);	/* check the buffer */
 
@@ -315,29 +318,26 @@ handle_write(struct intr_frame *f)
 
 	if(DEBUG) printf("Write: fd: %i  buffer: %x  size: %i\n", fd, (uint32_t) buffer, size);
 
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
-
 	/* write buffer of size size into file fd */
 	int write_count = write(fd, buffer, size);
 
-	/* release file system lock */
-	lock_release(&filesystem_lock);
-
 	/* return write count */
 	syscall_set_return_value(f, write_count);
+
+	/* release file system lock */
+	lock_release(&filesystem_lock);
 }
 	
 static void
 handle_seek(struct intr_frame *f)
 {
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
 	if(DEBUG) printf("seek\n");
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	unsigned position = (unsigned int) syscall_get_argument(f, 1); /* file position */
-
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
 
 	/* write buffer of size size into file fd */
 	seek(fd, position);
@@ -349,30 +349,32 @@ handle_seek(struct intr_frame *f)
 static void
 handle_tell(struct intr_frame *f)
 {
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
 	if(DEBUG) printf("tell\n");
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
-
 	/* fetch position of file fd */
 	unsigned position = tell(fd);
 
-	/* release file system lock */
-	lock_release(&filesystem_lock);
-
 	/* return position */
 	syscall_set_return_value(f, (int) position);
+
+	/* release file system lock */
+	lock_release(&filesystem_lock);
 }
 	
-static void handle_close(struct intr_frame *f UNUSED) {
+static void 
+handle_close(struct intr_frame *f UNUSED) 
+{	
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
 	if(DEBUG) printf("close\n");
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
-
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
 
 	/* fetch position of file fd */
 	close(fd);
@@ -771,7 +773,6 @@ syscall_get_argument(const struct intr_frame *f, unsigned int arg_number)
 static void
 syscall_set_return_value (struct intr_frame *f, int ret_value)
 {
-	if(DEBUG) printf("save return value in eax register @ %x\n", (uint32_t) f->eax);
 	f->eax = ret_value;
 }
 

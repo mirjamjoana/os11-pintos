@@ -14,6 +14,7 @@
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #include "threads/palloc.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
@@ -24,6 +25,9 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 struct child* process_get_child(struct thread* parent, tid_t child_tid);
+
+/* global variable */
+extern struct lock filesystem_lock;
 
 
 /* Starts a new thread running a user program loaded from
@@ -111,7 +115,11 @@ start_process (void *command_line_input)
 	if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
 	if_.cs = SEL_UCSEG;
 	if_.eflags = FLAG_IF | FLAG_MBS;
+	
+	/* aquire file lock, load and release */
+	lock_acquire(&filesystem_lock);
 	success = load (file_name, &if_.eip, &if_.esp);
+	lock_release(&filesystem_lock);
 
 	/* If load failed, quit. */
 	if (!success) {
