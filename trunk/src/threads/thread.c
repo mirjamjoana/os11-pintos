@@ -198,8 +198,7 @@ thread_create (const char *name, int priority,
 	t->exit_status = -1;
 	t->parent = thread_current();
 
-	/* initialize list of children */
-	list_init (&(t->children));
+	/* initialize list of file descriptors */
 	list_init (&(t->file_descriptors));
 
 	/* create new child node for children list */
@@ -551,6 +550,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   t->wakeup_tick = -1;
 
+  /* initialize children list */
+  list_init (&(t->children));
 
   list_push_back (&all_list, &t->allelem);
 }
