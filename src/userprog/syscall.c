@@ -15,7 +15,7 @@
 
 #define CONSOLE_BUFFER_SIZE 100
 #define MAX_OPEN_FILES 128
-#define DEBUG 0 
+#define DEBUG 1 
 #define DEBUG_PUTBUF 0
 
 /* prototypes */
@@ -76,18 +76,6 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-
-	if(DEBUG)
-	{
-		printf ("system call! hex dump for 4 words:\n");
-
-		hex_dump(0, f->esp, 0xf, true);
-
-		printf("syscall %i \n", *((uint32_t*) f->esp));
-		printf("arg0 fd - %i\n", *((uint32_t*) f->esp + 1));
-		printf("arg1 buffer* - %x\n", *((uint32_t*) f->esp + 2));
-		printf("arg2 size - %i\n", *((uint32_t*) f->esp + 3));
-	}
 
 	/* retrieve system call number 
 	and switch to corresponding method */
@@ -318,8 +306,6 @@ handle_read(struct intr_frame *f)
 static void
 handle_write(struct intr_frame *f)
 {
-	if(DEBUG) printf("write\n");
-
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	
 	const void *buffer = (const void*) syscall_get_argument(f, 1); /* target buffer pointer */
@@ -327,9 +313,7 @@ handle_write(struct intr_frame *f)
 
 	unsigned size = (unsigned int) syscall_get_argument(f, 2); /* target buffer size */
 
-	if(DEBUG) {
-		printf("fd: %i  buffer: %x  size: %i\n", fd, (uint32_t) buffer, size);
-	}
+	if(DEBUG) printf("Write: fd: %i  buffer: %x  size: %i\n", fd, (uint32_t) buffer, size);
 
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
@@ -674,8 +658,11 @@ write (int fd, const void *buffer, unsigned size)
 			/* if matching file descriptor has been found */
 			if(f != NULL)
 			{
+				if(DEBUG) printf("writing to user fd %i\n", fd);
 				/* write buffer to file */
 				writing_count += file_write(f, buffer, size);
+
+				if(DEBUG) printf("%i bytes have been written\n", writing_count);
 			}
 			else {
 				/* no fitting file desciptor found, panic! */
@@ -729,6 +716,8 @@ tell (int fd)
 void
 close (int fd)
 {
+	if(DEBUG) printf("try to close file %i\n", fd);
+
 	/* get threads file descriptors */
 	struct list* file_descriptors = &(thread_current()->file_descriptors);
 
@@ -742,9 +731,10 @@ close (int fd)
 		/* fetch list element */
 		fde = list_entry (e, struct file_descriptor_elem, elem);
 
-		/* if mathing element has been found  */
+		/* if matching element has been found  */
 		if (fde->file_descriptor == fd)
 		{
+			if(DEBUG) printf("file %i found. closing.\n", fd);
 			/* close and delete file object */
 			file_close(fde->file);
 
@@ -754,9 +744,10 @@ close (int fd)
 			/* free resources */
 		       	free(fde);
 
-			break;
+			return;
 		}
 	}
+	if(DEBUG) printf("file %i not found!\n", fd);
 }
 
 
@@ -768,8 +759,6 @@ syscall_get_argument(const struct intr_frame *f, unsigned int arg_number)
 {
 	/* virtual address of argument arg_number */
 	uint32_t *user_address_arg = ((uint32_t*) f->esp + arg_number + 1);
-
-	if(DEBUG) printf("computed user argument %i address %x from esp base %x\n", arg_number, (uint32_t)user_address_arg , (uint32_t) f->esp);
 
 	/* fetch and return kernel address of argument arg_number */
 	return (void *) *((uint32_t*)syscall_get_kernel_address(user_address_arg));
