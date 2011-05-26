@@ -17,7 +17,7 @@
 #include "userprog/process.h"
 #endif
 
-#define DEBUG 0 
+#define DEBUG 0
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -174,63 +174,74 @@ tid_t
 thread_create (const char *name, int priority,
                thread_func *function, void *aux)
 {
-  struct thread *t;
-  struct kernel_thread_frame *kf;
-  struct switch_entry_frame *ef;
-  struct switch_threads_frame *sf;
-  tid_t tid;
-  enum intr_level old_level;
+	struct thread *t;
+	struct kernel_thread_frame *kf;
+	struct switch_entry_frame *ef;
+	struct switch_threads_frame *sf;
+	tid_t tid;
+	enum intr_level old_level;
 
-  ASSERT (function != NULL);
+	ASSERT (function != NULL);
 
-  /* Allocate thread. */
-  t = palloc_get_page (PAL_ZERO);
-  if (t == NULL)
-    return TID_ERROR;
+	/* Allocate thread. */
+	t = palloc_get_page (PAL_ZERO);
+	if (t == NULL)
+		return TID_ERROR;
 
 
-  /* Initialize thread. */
-  init_thread (t, name, priority);
-  tid = t->tid = allocate_tid ();
-  t->wakeup_tick = -1;
-  t->parent = thread_current();
+	/* Initialize thread. */
+	init_thread (t, name, priority);
+	tid = t->tid = allocate_tid ();
 
-  if(DEBUG) printf("creating child. tid: %i\n", tid);
-  /* create child for current thread */
-  struct child* c = (struct child*) malloc(sizeof(struct child));
-  c->parent = thread_current();
-  c->tid = tid;
-  sema_init(&c->terminated, 0);
+	/* create new child node for children list */
+	struct child * c = (struct child *) malloc(sizeof(struct child));
 
-  /* add child process to children list */
-  list_push_front(&thread_current()->children, &c->elem);
+	/* initialize child fields */
+	sema_init(&c->terminated, 0);
+	sema_init(&c->initialized, 0);
+	c->parent = thread_current();
+	c->init_success = false;
+	c->exit_status = -1;
+	c->tid = tid;
 
-  /* Prepare thread for first run by initializing its stack.
-     Do this atomically so intermediate values for the 'stack'
-     member cannot be observed. */
-  old_level = intr_disable ();
+	/* add child process to children */
+	list_push_front(&thread_current()->children, &c->elem);
 
-  /* Stack frame for kernel_thread(). */
-  kf = alloc_frame (t, sizeof *kf);
-  kf->eip = NULL;
-  kf->function = function;
-  kf->aux = aux;
+	if(DEBUG) printf("Added child %i to thread %i\n", tid, thread_current()->tid);
 
-  /* Stack frame for switch_entry(). */
-  ef = alloc_frame (t, sizeof *ef);
-  ef->eip = (void (*) (void)) kernel_thread;
+	/* Prepare thread for first run by initializing its stack.
+	 Do this atomically so intermediate values for the 'stack'
+	 member cannot be observed. */
+	old_level = intr_disable ();
 
-  /* Stack frame for switch_threads(). */
-  sf = alloc_frame (t, sizeof *sf);
-  sf->eip = switch_entry;
-  sf->ebp = 0;
+	/* Stack frame for kernel_thread(). */
+	kf = alloc_frame (t, sizeof *kf);
+	kf->eip = NULL;
+	kf->function = function;
+	kf->aux = aux;
 
-  intr_set_level (old_level);
+	/* Stack frame for switch_entry(). */
+	ef = alloc_frame (t, sizeof *ef);
+	ef->eip = (void (*) (void)) kernel_thread;
 
-  /* Add to run queue. */
-  thread_unblock (t);
+	/* Stack frame for switch_threads(). */
+	sf = alloc_frame (t, sizeof *sf);
+	sf->eip = switch_entry;
+	sf->ebp = 0;
 
-  return tid;
+	intr_set_level (old_level);
+
+	/* Add to run queue. */
+	thread_unblock (t);
+
+	/* wait for thread to initialize itself */
+	sema_down(&c->initialized);
+
+	/* if initialization was corrupt */
+	if(!c->init_success)
+		return TID_ERROR;
+
+	return tid;
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -530,6 +541,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->fd_next_id = 2;
+  t->exit_status = -1;
+  t->wakeup_tick = -1;
+  t->parent = thread_current();
+
   list_push_back (&all_list, &t->allelem);
 
   /* initialize list of children */
