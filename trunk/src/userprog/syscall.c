@@ -15,7 +15,7 @@
 
 #define CONSOLE_BUFFER_SIZE 100
 #define MAX_OPEN_FILES 128
-#define DEBUG 1 
+#define DEBUG 0 
 #define DEBUG_PUTBUF 0
 
 /* prototypes */
