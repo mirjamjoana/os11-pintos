@@ -114,11 +114,12 @@ start_process (void *command_line_input)
 	success = load (file_name, &if_.eip, &if_.esp);
 
 	/* If load failed, quit. */
-	palloc_free_page (command_line_input);
 	if (!success) {
 		thread_exit ();
 	}
 
+	/* free resources */
+	palloc_free_page (command_line_input);
 
     /* copy arguments on stack. example stack:
      *
