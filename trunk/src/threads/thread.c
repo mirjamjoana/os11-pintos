@@ -77,6 +77,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+static void init_user_thread(struct thread * t, tid_t tid);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -188,34 +189,14 @@ thread_create (const char *name, int priority,
 	if (t == NULL)
 		return TID_ERROR;
 
-
 	/* Initialize thread. */
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
+	t->is_user_thread = function != idle;
 
-	/* user thread initialization */
-	t->fd_next_id = 2;
-	t->exit_status = -1;
-	t->parent = thread_current();
-
-	/* initialize list of file descriptors */
-	list_init (&(t->file_descriptors));
-
-	/* create new child node for children list */
-	struct child * c = (struct child *) malloc(sizeof(struct child));
-
-	/* initialize child fields */
-	sema_init(&c->terminated, 0);
-	sema_init(&c->initialized, 0);
-	c->parent = thread_current();
-	c->init_success = false;
-	c->exit_status = -1;
-	c->tid = tid;
-
-	/* add child process to children */
-	list_push_front(&thread_current()->children, &c->elem);
-
-	if(DEBUG) printf("Added child %i to thread %i\n", tid, thread_current()->tid);
+	/* if thread is user process, init user data fields */
+	if(t->is_user_thread)
+		init_user_thread(t, tid);
 
 	/* Prepare thread for first run by initializing its stack.
 	 Do this atomically so intermediate values for the 'stack'
@@ -242,14 +223,50 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
-	/* wait for thread to initialize itself */
-	sema_down(&c->initialized);
+	/* if we are an user thread */
+	if(t->is_user_thread) {
+		/* get child node */
+		struct child * c = process_get_child(thread_current(), tid);
 
-	/* if initialization was corrupt */
-	if(!c->init_success)
-		return TID_ERROR;
+		/* wait for thread to initialize itself */
+		sema_down(&c->initialized);
+
+		/* if initialization was corrupt */
+		if(!c->init_success)
+			return TID_ERROR;
+	}
 
 	return tid;
+}
+
+/* initiates a user thread */
+static void init_user_thread(struct thread * t, tid_t tid){
+
+	if(DEBUG) printf("initializing user thread data\n");
+
+	/* user thread initialization */
+	t->fd_next_id = 2;
+	t->exit_status = -1;
+	t->parent = thread_current();
+
+	/* initialize list of file descriptors */
+	list_init (&(t->file_descriptors));
+
+	/* create new child node for children list */
+	struct child * c = (struct child *) malloc(sizeof(struct child));
+
+	/* initialize child fields */
+	sema_init(&c->terminated, 0);
+	sema_init(&c->initialized, 0);
+	c->parent = thread_current();
+	c->init_success = false;
+	c->exit_status = -1;
+	c->tid = tid;
+
+	/* add child process to children */
+	list_push_front(&thread_current()->children, &c->elem);
+
+	if(DEBUG) printf("Added child node from thread %i to thread %i\n", tid, thread_current()->tid);
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
