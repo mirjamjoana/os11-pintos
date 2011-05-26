@@ -142,6 +142,8 @@ struct file_descriptor_elem
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
+struct lock filesystem_lock; /* the global file system lock */
+
 void thread_init (void);
 void thread_start (void);
 
