@@ -729,28 +729,29 @@ process_get_child(struct thread* parent, tid_t child_tid)
 {
 	if(DEBUG_EXIT) printf("searchin child %i in parent %i - ", (unsigned) child_tid, parent->tid);
 
-        /* list of child threads */
-        struct list* children = &(parent->children);
+	/* list of child threads */
+	struct list* children = &(parent->children);
 
-        /* loop variables */
-        struct list_elem *e;
-        struct child *c = NULL;
+	/* loop variables */
+	struct list_elem *e;
+	struct child *c = NULL;
 
-        /* search child with tid child_tid and return its termination semaphore */
-        for (e = list_begin (children); e != list_end (children); e = list_next (e))
-        {
-                c = list_entry (e, struct child, elem);
+	/* search child with tid child_tid and return its termination semaphore */
+	for (e = list_begin (children); e != list_end (children); e = list_next (e))
+	{
+			c = list_entry (e, struct child, elem);
 
-		if(DEBUG_EXIT)printf("|%i-%i| ", c->tid, child_tid);
+			if(DEBUG_EXIT)printf("|%i-%i| ", c->tid, child_tid);
 
-		if(c->tid == child_tid) {
-                        if(DEBUG_EXIT) printf("found.\n");
-			return c;
-                }
-        }
+			if(c->tid == child_tid)
+			{
+					if(DEBUG_EXIT) printf("found.\n");
+					return c;
+			}
+	}
 
 	if(DEBUG_EXIT) printf("not found.\n");
 
-        return NULL;
+	return NULL;
 }
 
