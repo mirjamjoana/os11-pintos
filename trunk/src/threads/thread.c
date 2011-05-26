@@ -193,6 +193,15 @@ thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
+	/* user thread initialization */
+	t->fd_next_id = 2;
+	t->exit_status = -1;
+	t->parent = thread_current();
+
+	/* initialize list of children */
+	list_init (&(t->children));
+	list_init (&(t->file_descriptors));
+
 	/* create new child node for children list */
 	struct child * c = (struct child *) malloc(sizeof(struct child));
 
@@ -540,16 +549,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  t->fd_next_id = 2;
-  t->exit_status = -1;
   t->wakeup_tick = -1;
-  t->parent = thread_current();
+
 
   list_push_back (&all_list, &t->allelem);
-
-  /* initialize list of children */
-  list_init (&(t->children));
-  list_init (&(t->file_descriptors));
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

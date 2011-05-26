@@ -94,6 +94,7 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     struct list_elem sleepelem;			/* List element for sleeping threads list. */
 
+    bool is_user_thread;				/* flag if current thread is a user thread */
     struct thread * parent;			/* parent of the this thread */
     struct list children;				/* List of children (including exit status). */
     struct list file_descriptors;		/* List of file descriptors. */
