@@ -308,6 +308,10 @@ process_exit (void)
 	struct thread *cur = thread_current ();
 	uint32_t *pd;
 
+	/* get file system mutex */
+	if(!lock_held_by_current_thread(&filesystem_lock))
+		lock_acquire(&filesystem_lock);
+	
 	/* close all open files and empty file list */
 	while(!list_empty(&thread_current()->file_descriptors))
 	{
@@ -327,7 +331,10 @@ process_exit (void)
 		free(fde);
 	}
 
-	/* close all open files and empty file list */
+	/* release file system mutex */
+	lock_release(&filesystem_lock);
+
+	/* empty children list */
 	while(!list_empty(&thread_current()->children))
 	{
 		/* get current list element */
@@ -339,7 +346,7 @@ process_exit (void)
 		/* remove child from list */
 		list_remove(&c->elem);
 
-		/* free file descriptor element */
+		/* free child element */
 		free(c);
 	}
 
