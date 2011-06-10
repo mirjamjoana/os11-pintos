@@ -1,6 +1,8 @@
 #ifndef VM_PAGE_H
 #define VM_PAGE_H
 
+#include "threads/palloc.h"
+
 /* supplemental page table */
 
 void *get_user_page (enum palloc_flags);

@@ -21,7 +21,7 @@
 #include "threads/vaddr.h"
 #include "vm/page.h"
 
-#define DEBUG_EXIT 0 
+#define DEBUG_EXIT 0
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -81,9 +81,9 @@ start_process (void *command_line_input)
 	int argument_count = 0;
 	for (token = strtok_r ((char *)command_line_input, " ", &save_ptr); token != NULL;
 		token = strtok_r (NULL, " ", &save_ptr)){
-		   argument_count++;		
+		   argument_count++;
 	}
-	
+
 	/* create array of argument pointers */
 	char** arguments = malloc(argument_count * sizeof(char*));
 
@@ -116,7 +116,7 @@ start_process (void *command_line_input)
 	if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
 	if_.cs = SEL_UCSEG;
 	if_.eflags = FLAG_IF | FLAG_MBS;
-	
+
 	/* aquire file lock, load and release */
 	lock_acquire(&filesystem_lock);
 	success = load (file_name, &if_.eip, &if_.esp);
@@ -160,10 +160,6 @@ no argument:
 
     /* get stack pointer */
     void* esp = if_.esp;
-    void* initial_esp = esp; /* debug */
-
-
-  //  printf("Start copying %i arguments to stack. ESP: %x\n", argument_count, (unsigned) esp);
 
     /* loop variables */
     int j;
@@ -186,10 +182,8 @@ no argument:
 
             /* store argument stack pointer */
             arguments[j] = esp;
-		
-	   // printf("copying %i bytes from  %x to %x\n", size, (unsigned) src, (unsigned) esp);
             
-	    /* copy argument */
+            /* copy argument */
             memcpy(esp, src, size);
     }
 
@@ -231,11 +225,6 @@ no argument:
     /* push return address on the stack */
     esp -= sizeof(uint32_t);
     *((uint32_t *) esp) = (uint32_t) 0;
-
-//    printf("Finished copying arguments on stack.\n");
-
-    /* debugging */
-    //hex_dump((uintptr_t) 0, esp, (unsigned) initial_esp - (unsigned) esp, true);
 
     /* update frame esp */
     if_.esp = esp;
@@ -287,7 +276,7 @@ process_wait (tid_t child_tid)
 
 		/* remove terminated child from list */
 		list_remove(&child->elem);
-		
+
 		/* free resources */
 		free(child);
 
@@ -312,7 +301,7 @@ process_exit (void)
 	/* get file system mutex */
 	if(!lock_held_by_current_thread(&filesystem_lock))
 		lock_acquire(&filesystem_lock);
-	
+
 	/* close all open files and empty file list */
 	while(!list_empty(&thread_current()->file_descriptors))
 	{
@@ -706,7 +695,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable)) 
         {
-          free_user_page (kpage);
+    	  free_user_page (kpage);
           return false; 
         }
 
@@ -733,7 +722,7 @@ setup_stack (void **esp)
       if (success)
         *esp = PHYS_BASE;
       else
-        free_user_page (kpage);
+    	  free_user_page (kpage);
     }
   return success;
 }

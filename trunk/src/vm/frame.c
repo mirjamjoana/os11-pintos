@@ -1,4 +1,4 @@
-#include "threads/palloc.h"
+#include "vm/frame.h"
 
 /* Main memory allocation */
 
