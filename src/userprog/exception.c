@@ -148,9 +148,23 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* check if error rose on exec */
+  /* check if user page fault can be handled */
   if(user)
-	  thread_exit();
+  {
+	  if(not_present)
+	  {
+		  /* swap in page / load file */
+	  }
+	  else if (false /* is_legal_stack_growth() */)
+	  {
+		  /* grow stack */
+	  }
+	  else
+	  {
+		  /* illegal page fault - exit thread */
+		  thread_exit();
+	  }
+  }
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to

@@ -1,10 +1,14 @@
 #ifndef VM_FRAME_H
 #define VM_FRAME_H
 
+#include "lib/kernel/bitmap.h"
+#include "threads/palloc.h"
+
 /* Main memory allocation */
 
-void check_for_free_frames(int count);
+void *get_user_frame (enum palloc_flags);
+void *get_user_frames (enum palloc_flags, size_t page_cnt);
 
-void replace_frame(void *frame);
+//static void replace_frame(void *frame);
 
 #endif

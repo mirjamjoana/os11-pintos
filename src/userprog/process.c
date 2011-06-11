@@ -97,9 +97,7 @@ start_process (void *command_line_input)
 	for (token = strtok_r ((char *)command_line_input_copy, " ", &save_ptr); token != NULL;
 		token = strtok_r (NULL, " ", &save_ptr))
 	{
-		   //printf("token %i: %s @ %x [%i bytes]\n", i, token, (unsigned)token, strlen(token));
 		   arguments[i] = token;
-		   //printf("token %i: %s @ %x [%i bytes] -- CHECK\n", i, arguments[i], (unsigned)arguments[i], strlen(arguments[i]));
 		   i++;
 	}
 
@@ -129,34 +127,6 @@ start_process (void *command_line_input)
 
 	/* free resources */
 	palloc_free_page (command_line_input);
-
-    /* copy arguments on stack. example stack:
-     *
-	Address         Name			Data			Type
-	0xbffffffc      argv[3][...]    "bar\0"			char[4]
-	0xbffffff8      argv[2][...]    "foo\0"			char[4]
-	0xbffffff5      argv[1][...]    "-l\0"			char[3]
-	0xbfffffed      argv[0][...]    "/bin/ls\0"		char[8]
-	0xbfffffec      word-align      0				uint8_t
-	0xbfffffe8      argv[4]         0				char *
-	0xbfffffe4      argv[3]         0xbffffffc		char *
-	0xbfffffe0      argv[2]         0xbffffff8		char *
-	0xbfffffdc      argv[1]         0xbffffff5		char *
-	0xbfffffd8      argv[0]         0xbfffffed		char *
-	0xbfffffd4      argv            0xbfffffd8		char **
-	0xbfffffd0      argc            4				int
-	0xbfffffcc      return address  0				void (*) ()
-
-no argument:
-	Address         Name			Data			Type
-	0xbffffff0      argv[0][...]    "args-none\0"	char[8]
-	0xbfffffec      word-align      0				uint8_t
-	0xbfffffdc      argv[1]         0				char *
-	0xbfffffd8      argv[0]         0xbfffffed		char *
-	0xbfffffd4      argv            0xbfffffd8		char **
-	0xbfffffd0      argc            1				int
-	0xbfffffcc      return address  0				void (*) ()
-	*/
 
     /* get stack pointer */
     void* esp = if_.esp;
