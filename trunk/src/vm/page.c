@@ -33,13 +33,13 @@ is_legal_stack_growth (void **esp)
 	bool success = false;
 	struct thread *current_thread = thread_current();
 	/* checks whether there is enough space left (less than 8MB occupied) */
-	if ((PHYS_BASE - *esp) > 800000) {
+	if ((PHYS_BASE - *esp) > 0x800000) {
 		current_thread->exit_status = -1;
 		thread_exit();
 	}
 
 	/* check whether it is an illegal push operation (more than 32 bytes beyond (PHYS_BASE - 8MB)) */
-	if ( (*esp - 20) < (PHYS_BASE - 800000 )) {
+	if ( (*esp - 20) < (PHYS_BASE - 0x800000 )) {
 		current_thread->exit_status = -1;
 		thread_exit();
 	}
