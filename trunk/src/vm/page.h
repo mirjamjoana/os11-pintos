@@ -5,6 +5,8 @@
 #include <hash.h>
 #include "filesys/file.h"
 
+#define STACK_GROW_LIMIT 8 /* stack grow max 32 bytes at once (8 x 32 bit)*/
+
 /*
  * The supplemental page table is used for at least two purposes.
  * Most importantly, on a page fault, the kernel looks up the virtual
@@ -34,6 +36,12 @@ void free_user_page (void * page);
 void free_multiple_user_pages (void * pages, size_t page_cnt);
 
 /* lazy allocation */
-void *create_lazy_user_page (struct file* file, uint32_t offset, uint32_t length);
+void *create_lazy_user_pages (struct file* file, uint32_t offset, uint32_t length);
+
+/* stack grow methods */
+bool is_legal_stack_growth (void **esp);
+void grow_stack (void **esp);
+
+bool install_user_page (void *upage, void *kpage, bool writable);
 
 #endif

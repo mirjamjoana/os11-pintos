@@ -4,56 +4,93 @@
 #include <debug.h>
 #include "threads/vaddr.h"
 #include "threads/thread.h"
+#include "userprog/pagedir.h"
 
-/* supplemental page table */
 
-void *get_user_page(enum palloc_flags flags) {
-	return get_user_frame(flags);
+void *
+get_multiple_user_pages(enum palloc_flags flags, size_t page_cnt)
+{
+	/* allocate user frame */
+	return alloc_user_frames(flags, page_cnt);
 }
 
-void *get_multiple_user_pages(enum palloc_flags flags, size_t page_cnt){
-	return get_user_frames(flags, page_cnt);
+
+void *
+get_user_page(enum palloc_flags flags)
+{
+	return get_multiple_user_pages(flags, 1);
 }
 
-void free_user_page(void * page){
-	return palloc_free_page(page);
-}
 
-void free_multiple_user_pages(void * pages, size_t page_cnt){
+void
+free_multiple_user_pages(void * pages, size_t page_cnt)
+{
+	/* TODO check if pages are present */
+	/* TODO present ? delete MM frame : delete SWAP frame */
 	return palloc_free_multiple(pages, page_cnt);
 }
 
-void *create_lazy_user_page (struct file* file UNUSED, uint32_t offset UNUSED, uint32_t length UNUSED) {
+void
+free_user_page(void * page)
+{
+	free_multiple_user_pages(page, 1);
+}
+
+
+void *
+create_lazy_user_pages (struct file* file UNUSED, uint32_t offset UNUSED, uint32_t length UNUSED)
+{
 	return NULL;
 }
 
-static bool
+
+bool
 is_legal_stack_growth (void **esp)
 {	
-	bool success = false;
-	struct thread *current_thread = thread_current();
-	/* checks whether there is enough space left (less than 8MB occupied) */
-	if ((PHYS_BASE - *esp) > 0x800000) {
-		current_thread->exit_status = -1;
-		thread_exit();
-	}
+	void *current_esp =  (void*) thread_current()->stack;
 
-	/* check whether it is an illegal push operation (more than 32 bytes beyond (PHYS_BASE - 8MB)) */
-	if ( (*esp - 20) < (PHYS_BASE - 0x800000 )) {
-		current_thread->exit_status = -1;
-		thread_exit();
-	}
+	if(current_esp - *esp < STACK_GROW_LIMIT)
+		return true;
 
-	uint8_t *kpage;
-	kpage = get_user_page (PAL_ZERO);
-	if (kpage != NULL) 
-	  {
-	    success = install_page (((uint8_t *) *esp) - PGSIZE, kpage, true);
-	    if (success)
-		*esp = *esp + PGSIZE;
-	    else
-	    	free_user_page (kpage);
-	  }
-	return success;
- 	
+	return false;
 }
+
+
+void
+grow_stack (void **esp)
+{
+	/* TODO check if new page is necessary */
+	if(false /* new_page_necessary() */)
+	{
+		/* checks whether there is enough space left (less than 8MB occupied) */
+		if ((PHYS_BASE - *esp) < 0x800000)
+		{
+			uint8_t *kpage;
+			kpage = get_user_page (PAL_ZERO);
+
+			if (kpage != NULL)
+			{
+				bool success = install_page (((uint8_t *) *esp) - PGSIZE, kpage, true);
+				if (success)
+					*esp = *esp + PGSIZE;
+				else
+					free_user_page (kpage);
+			}
+		}
+	}
+}
+
+bool
+install_user_page (void *upage, void *kpage, bool writable)
+{
+  struct thread *t = thread_current ();
+
+  register_frame(upage, kpage);
+
+  /* Verify that there's not already a page at that virtual
+     address, then map our page there. */
+  return (pagedir_get_page (t->pagedir, upage) == NULL
+          && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+

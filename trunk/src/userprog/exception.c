@@ -155,7 +155,7 @@ page_fault (struct intr_frame *f)
 	  {
 		  /* swap in page / load file */
 	  }
-	  else if (false /* is_legal_stack_growth() */)
+	  else if (is_legal_stack_growth())
 	  {
 		  /* grow stack */
 	  }
