@@ -20,6 +20,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "vm/page.h"
+#include "vm/frame.h"
 
 #define DEBUG_EXIT 0
 
@@ -649,6 +650,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
+      /* acquire frame lock */
+      lock_acquire(&user_frames_lock);
+
       /* Get a page of memory. */
       uint8_t *kpage = get_user_page(0x0);
       if (kpage == NULL)
@@ -663,11 +667,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
       /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
+      if (!install_user_page (upage, kpage, writable))
         {
     	  free_user_page (kpage);
           return false; 
         }
+
+      /* release frame lock */
+      lock_release(&user_frames_lock);
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -685,15 +692,22 @@ setup_stack (void **esp)
   uint8_t *kpage;
   bool success = false;
 
+  /* acquire frame lock */
+  lock_acquire(&user_frames_lock);
+
   kpage = get_user_page (PAL_ZERO);
-  if (kpage != NULL) 
+  if (kpage != NULL)
     {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      success = install_user_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
         *esp = PHYS_BASE;
       else
     	  free_user_page (kpage);
     }
+
+  /* release frame lock */
+  lock_release(&user_frames_lock);
+
   return success;
 }
 
