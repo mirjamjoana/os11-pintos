@@ -21,6 +21,8 @@ enum thread_status
    You can redefine this to whatever type you like. */
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
+typedef int mapid_t;
+#define MAPID_ERROR ((mapid_t) -1)          /* Error value for mapid_t. */
 
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
@@ -140,6 +142,7 @@ struct file_descriptor_elem
   {
     struct list_elem elem;				/* list dummy */
     int file_descriptor;				/* file handler number */
+    mapid_t mapid_t;                        /* mapping identifier */
     struct file *file; 					/* file link */
   };
 
