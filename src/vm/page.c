@@ -45,6 +45,13 @@ free_user_page(void * page)
 }
 
 
+void
+destroy_user_pages(void)
+{
+	/* TODO check swap memory for user frames */
+	destroy_user_frames();
+}
+
 void *
 create_lazy_user_pages (struct file* file UNUSED, uint32_t offset UNUSED, uint32_t length UNUSED)
 {

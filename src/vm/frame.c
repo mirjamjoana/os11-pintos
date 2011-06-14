@@ -8,6 +8,9 @@
 #include <string.h>
 #include <hash.h>
 
+/* static member functions */
+static struct frame * frame_lookup (const void *address);
+
 
 void
 user_frames_init()
@@ -36,7 +39,6 @@ alloc_user_frames(enum palloc_flags flags, size_t frame_cnt)
 }
 
 void
-//register_frames(void *frames, size_t frame_cnt, size_t frame_idx)
 register_frame (void *upage, void *kpage)
 {
 	ASSERT(lock_held_by_current_thread(&user_frames_lock));
@@ -74,6 +76,29 @@ unregister_frames (void *kpage, size_t page_cnt)
 		}
 	}
 
+}
+
+/* destroy every user frame of the current thread */
+void
+destroy_user_frames()
+{
+	struct hash_iterator i;
+	void * pagedir = thread_current()->pagedir;
+
+	hash_first (&i, &user_frames);
+
+	while (hash_next (&i))
+	  {
+	    struct frame *f = hash_entry (hash_cur (&i), struct frame, hash_elem);
+	    if(f->pagedir == pagedir)
+	    {
+	    	/* delete frame from hash */
+	    	hash_delete(&user_frames, &f->hash_elem);
+
+	    	/* release allocated space */
+	    	free(f);
+	    }
+	  }
 }
 
 /* Returns the page containing the given virtual address,
