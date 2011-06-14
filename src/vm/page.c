@@ -25,9 +25,17 @@ get_user_page(enum palloc_flags flags)
 void
 free_multiple_user_pages(void * pages, size_t page_cnt)
 {
+	lock_acquire(&user_frames_lock);
+
 	/* TODO check if pages are present */
 	/* TODO present ? delete MM frame : delete SWAP frame */
-	return palloc_free_multiple(pages, page_cnt);
+
+	/* delete hash entry */
+	unregister_frames(pages, page_cnt);
+
+	palloc_free_multiple(pages, page_cnt);
+
+	lock_release(&user_frames_lock);
 }
 
 void
