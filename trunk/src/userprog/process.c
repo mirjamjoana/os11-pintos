@@ -328,6 +328,9 @@ process_exit (void)
 		pagedir_destroy (pd);
 	}
 
+	/* cleanup user pages */
+	destroy_user_pages();
+
 	/* try to get child element of current thread */
 	struct child *list_element = process_get_child(cur->parent, cur->tid);
 	if(DEBUG_EXIT) printf("process exit - parent: %i - child: %i", cur->parent->tid, cur->tid);
