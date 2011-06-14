@@ -7,6 +7,7 @@
 #include "threads/thread.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
+#include "threads/palloc.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "filesys/filesys.h"
@@ -35,6 +36,8 @@ static void handle_seek(struct intr_frame *f);
 static void handle_tell(struct intr_frame *f);
 static void handle_close(struct intr_frame *f);
 static void handle_no_such_syscall(struct intr_frame *f);
+static void handle_mmap(struct intr_frame *f);
+static void handle_munmap(struct intr_frame *f);
 
 static void* syscall_get_argument(const struct intr_frame *f, unsigned int arg_number);
 static void syscall_set_return_value (struct intr_frame *f, int ret_value);
@@ -55,6 +58,8 @@ int write (int fd, const void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+mapid_t mmap(int fd, void *addr);
+void munmap(mapid_t mapping);
 
 /* global variables */
 extern struct lock filesystem_lock; /* mutex semaphore for filesystem */
@@ -131,10 +136,18 @@ syscall_handler (struct intr_frame *f)
 		case SYS_TELL:
 			handle_tell(f);
 			break;
-
+		
 		case SYS_CLOSE:
 			handle_close(f);
 			break;
+
+		case SYS_MMAP:
+			handle_mmap(f);
+			break;	
+			
+		case SYS_MUNMAP:
+			handle_munmap(f);
+			break;	
 
 		default: /* SYSCALL_ERROR: */
 			handle_no_such_syscall(f);
@@ -378,6 +391,46 @@ handle_close(struct intr_frame *f UNUSED)
 
 	/* fetch position of file fd */
 	close(fd);
+
+	/* release file system lock */
+	lock_release(&filesystem_lock);
+}
+
+static void 
+handle_mmap(struct intr_frame *f UNUSED) 
+{	
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
+	if(DEBUG) printf("mmap\n");
+
+	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
+	void *addr = (void*) syscall_get_argument(f, 1); /* target mapping pointer */
+
+    syscall_check_pointer(addr);	/* check the address */
+
+	/* map file fd to addr */
+	mapid_t mapid = mmap(fd, addr);
+	
+	/* return position */
+	syscall_set_return_value(f, (mapid_t) mapid);
+
+	/* release file system lock */
+	lock_release(&filesystem_lock);
+}
+
+static void 
+handle_munmap(struct intr_frame *f UNUSED) 
+{	
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
+	if(DEBUG) printf("mmap\n");
+
+	mapid_t mapping = (int) syscall_get_argument(f, 0); /* map id */
+
+	/* unmap file specified by mapping */
+	munmap(mapping);
 
 	/* release file system lock */
 	lock_release(&filesystem_lock);
@@ -851,4 +904,55 @@ syscall_get_file(int file_descriptor)
 
 	/* if no file descriptor is found, return null */
 	return NULL;
+}
+
+/* maps file fd into virtual pages beginning at addr */
+mapid_t 
+mmap (int fd, void *addr) 
+{
+	/* fails if file has a length of zero bytes */
+	if (filesize(fd) == 0) {
+		return -1;
+	}
+	/* fails if addr is zero */
+	else if (addr == 0) {
+		return -1;
+	}
+	switch(fd) 
+	{
+		/* console input and output are not mappable */
+		case STDOUT_FILENO: return -1; break;
+		case STDIN_FILENO: return -1; break;
+		default: 
+		{
+		    size_t size = filesize(fd);
+
+            void *page_start; 
+		    /* checks whether the file fits into a multiple of pages */
+		     if (size % PGSIZE != 0) {
+			
+		        /* allocate all fully occupied pages */
+		        page_start = (void*) get_multiple_user_pages(PAL_ZERO, ((size / PGSIZE) + 1));
+			}
+			else {
+			    /* allocate pages */
+		        page_start = (void*) get_multiple_user_pages(PAL_ZERO, (size / PGSIZE));
+			} 
+			/* TODO */
+			/* fd->mapid_t = ... */
+			
+			/* TODO */
+			return -1;	
+		}
+	}
+}
+
+
+/* Unmaps the mapping designated by mapping, which must be a mapping ID 
+returned by a previous call to mmap by the same process that has not yet been 
+unmapped.  */
+void 
+munmap (mapid_t mapping)
+{
+    /* TODO */
 }
