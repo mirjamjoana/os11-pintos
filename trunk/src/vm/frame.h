@@ -28,15 +28,7 @@ void *alloc_user_frames (enum palloc_flags, size_t page_cnt);
 void register_frame (void *upage, void *kpage);
 void unregister_frames (void *kpage, size_t page_cnt);
 
-static struct frame * frame_lookup (const void *address);
-
-/* evict frame */
-//bool evict_frame(void* frame);
-
-//static void replace_frame(void *frame);
-
-
-
+void destroy_user_frames(void);
 
 /* hash functions */
 unsigned frame_hash (const struct hash_elem *f_, void *aux);

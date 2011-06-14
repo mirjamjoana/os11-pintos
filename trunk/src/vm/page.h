@@ -35,6 +35,9 @@ void *get_multiple_user_pages (enum palloc_flags, size_t page_cnt);
 void free_user_page (void * page);
 void free_multiple_user_pages (void * pages, size_t page_cnt);
 
+/* page destructor */
+void destroy_user_pages(void);
+
 /* lazy allocation */
 void *create_lazy_user_pages (struct file* file, uint32_t offset, uint32_t length);
 
