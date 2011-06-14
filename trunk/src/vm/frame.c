@@ -4,6 +4,7 @@
 #include "threads/palloc.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
+#include <stdio.h>
 #include <string.h>
 #include <hash.h>
 
@@ -31,44 +32,6 @@ alloc_user_frames(enum palloc_flags flags, size_t frame_cnt)
 		/* TODO try to swap out pages for allocation */
 	}
 
-//	struct pool *user_pool = get_user_pool();
-//
-//	void *frames = NULL;
-//	size_t frame_idx;
-//
-//	if (frame_cnt == 0)
-//		return NULL;
-//
-//	/* acquire user pool lock */
-//	lock_acquire (&user_pool->lock);
-//
-//	/* check for frame_cnt free frames */
-//	frame_idx = bitmap_scan_and_flip (user_pool->used_map, 0, frame_cnt, false);
-//
-//	/* if no free slot has been found */
-//	if (frame_idx == BITMAP_ERROR)
-//	{
-//		/* TODO swap frame_cnt frames to disk and repeat */
-//	}
-//
-//	/* if a free slot has been found */
-//	if (frame_idx != BITMAP_ERROR)
-//	{
-//		/* save frame pointer */
-//		frames = user_pool->base + PGSIZE * frame_idx;
-//	}
-//
-//	ASSERT(frames != NULL);
-//
-//	/* initialize page with zeroes */
-//	if(flags & PAL_ZERO)
-//		memset (frames, 0, PGSIZE * frame_cnt);
-//
-//	/* release user pool lock */
-//	lock_release (&user_pool->lock);
-//
-//	return frames;
-
 	return frames;
 }
 
@@ -86,12 +49,52 @@ register_frame (void *upage, void *kpage)
 	ASSERT(hash_replace (&user_frames, &f->hash_elem) == NULL);
 }
 
+void
+unregister_frames (void *kpage, size_t page_cnt)
+{
+	ASSERT(lock_held_by_current_thread(&user_frames_lock));
+
+	unsigned int i;
+	for(i = 0; i < page_cnt; i++)
+	{
+		/* fetch frame */
+		struct frame* f = frame_lookup(kpage + PGSIZE * i);
+
+		if(f->pagedir == thread_current()->pagedir)
+		{
+			/* delete hash entry */
+			hash_delete(&user_frames, &f->hash_elem);
+
+			/* free data structure */
+			free(f);
+		}
+		else {
+			printf("Privilege violation: delete frame entry of another process");
+			thread_exit();
+		}
+	}
+
+}
+
+/* Returns the page containing the given virtual address,
+   or a null pointer if no such page exists. */
+static struct frame *
+frame_lookup (const void *address)
+{
+  struct frame f;
+  struct hash_elem *e;
+
+  f.id = pg_no(address);
+  e = hash_find (&user_frames, &f.hash_elem);
+  return e != NULL ? hash_entry (e, struct frame, hash_elem) : NULL;
+}
+
 /* Returns a hash value for frame f. */
 unsigned
 frame_hash (const struct hash_elem *f_, void *aux UNUSED)
 {
   const struct frame *f = hash_entry (f_, struct frame, hash_elem);
-  return hash_bytes (&f->id, sizeof f->id);
+  return hash_int (f->id);
 }
 
 /* Returns true if frame a precedes frame b. */

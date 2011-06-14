@@ -159,11 +159,10 @@ page_fault (struct intr_frame *f)
 	  {
 		  /* grow stack */
 	  }
-	  else
-	  {
-		  /* illegal page fault - exit thread */
-		  thread_exit();
-	  }
+
+	  /* illegal page fault - exit thread */
+	  thread_exit();
+
   }
 
   /* To implement virtual memory, delete the rest of the function

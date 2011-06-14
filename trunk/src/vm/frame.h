@@ -26,6 +26,9 @@ void user_frames_init(void);
 void *alloc_user_frames (enum palloc_flags, size_t page_cnt);
 
 void register_frame (void *upage, void *kpage);
+void unregister_frames (void *kpage, size_t page_cnt);
+
+static struct frame * frame_lookup (const void *address);
 
 /* evict frame */
 //bool evict_frame(void* frame);

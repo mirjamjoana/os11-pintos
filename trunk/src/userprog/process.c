@@ -572,7 +572,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 /* load() helpers. */
 
+
+#if !VM
 static bool install_page (void *upage, void *kpage, bool writable);
+#endif
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -720,6 +723,7 @@ setup_stack (void **esp)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
+#if !VM
 static bool
 install_page (void *upage, void *kpage, bool writable)
 {
@@ -730,6 +734,7 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
+#endif
 
 /*
  * Find child with id child_id.
