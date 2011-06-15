@@ -1,8 +1,9 @@
+#include <debug.h>
+#include <stdio.h>
 #include "vm/page.h"
 #include "vm/frame.h"
 #include "threads/palloc.h"
 #include "threads/pte.h"
-#include <debug.h>
 #include "threads/vaddr.h"
 #include "threads/thread.h"
 #include "threads/malloc.h"
@@ -10,6 +11,7 @@
 #include "userprog/process.h"
 
 static bool install_lazy_user_page (void *upage, void *kpage, bool writable);
+static struct sup_page *page_lookup (const void *address);
 
 void *
 get_multiple_user_pages(enum palloc_flags flags, size_t page_cnt)
@@ -61,10 +63,12 @@ create_lazy_user_page (struct file* file, struct Elf32_Ehdr *ehdr)
 {
 	/* create sup pte */
 	struct sup_page*  p = (struct sup_page *) malloc(sizeof(struct sup_page));
+
 	p->f = file;
 	p->isExec = true;
 	p->swap = false;
-	p->vaddr = pg_round_down((void *)ehdr->e_entry);
+	p->ehdr = ehdr;
+	p->vaddr = (void *) (ehdr->e_entry & PTE_ADDR);
 
 	/* insert into sup page table */
 	ASSERT(hash_replace (&thread_current()->sup_page_table, &p->elem) == NULL);
@@ -97,6 +101,80 @@ is_legal_stack_growth (void **esp)
 }
 
 
+bool
+install_user_page (void *upage, void *kpage, bool writable)
+{
+  struct thread *t = thread_current ();
+
+  register_frame(upage, kpage);
+
+  if(DEBUG) printf("Installing User Page: %x -> %x\n", (unsigned int) upage, (unsigned int) kpage);
+
+  /* Verify that there's not already a page at that virtual
+     address, then map our page there. */
+  return (pagedir_get_page (t->pagedir, upage) == NULL
+          && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+static bool
+install_lazy_user_page (void *upage, void *kpage, bool writable)
+{
+	struct thread *t = thread_current ();
+
+	if(DEBUG) printf("Installing Lazy User Page: %x -> %x\n", (unsigned int) upage, (unsigned int) kpage);
+
+	/* Verify that there's not already a page at that virtual
+	   address, then map our page there. */
+	return (pagedir_get_page (t->pagedir, upage) == NULL
+			&& pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+/* Returns a hash value for frame f. */
+unsigned
+sup_page_hash (const struct hash_elem *p_, void *aux UNUSED)
+{
+  const struct sup_page *p = hash_entry (p_, struct sup_page, elem);
+  return hash_int ((int) (((unsigned int) p->vaddr) & PTE_ADDR));
+}
+
+/* Returns true if frame a precedes frame b. */
+bool
+sup_page_less (const struct hash_elem *a_, const struct hash_elem *b_,
+           void *aux UNUSED)
+{
+  const struct sup_page *a = hash_entry (a_, struct sup_page, elem);
+  const struct sup_page *b = hash_entry (b_, struct sup_page, elem);
+
+  return ((unsigned int) a->vaddr & PTE_ADDR) < ((unsigned int) b->vaddr & PTE_ADDR);
+}
+
+
+/* finds hash entry and handles swap / load */
+bool
+find_and_load_page(void* vaddr)
+{
+	struct sup_page* p = page_lookup(vaddr);
+	if(p != NULL)
+	{
+		/* complete initialization */
+		if((unsigned int) p->vaddr == USER_CODE_START)
+		{
+			return load_user_code_and_data(p->f, p->ehdr);
+		}
+		else if(p->swap)
+		{
+			/* swap in page */
+		}
+		else
+		{
+			/* load memory mapped page from file */
+		}
+	}
+
+	return false;
+}
+
+
 void
 grow_stack (void **esp)
 {
@@ -121,45 +199,15 @@ grow_stack (void **esp)
 	}
 }
 
-bool
-install_user_page (void *upage, void *kpage, bool writable)
+/* hash search */
+static struct sup_page *
+page_lookup (const void *address)
 {
-  struct thread *t = thread_current ();
+  struct sup_page p;
+  struct hash_elem *e;
 
-  register_frame(upage, kpage);
-
-  /* Verify that there's not already a page at that virtual
-     address, then map our page there. */
-  return (pagedir_get_page (t->pagedir, upage) == NULL
-          && pagedir_set_page (t->pagedir, upage, kpage, writable));
+  p.vaddr = (void *) ((unsigned int)address & PTE_ADDR);
+  e = hash_find (&thread_current()->sup_page_table, &p.elem);
+  return e != NULL ? hash_entry (e, struct sup_page, elem) : NULL;
 }
 
-static bool
-install_lazy_user_page (void *upage, void *kpage, bool writable)
-{
-	struct thread *t = thread_current ();
-
-	/* Verify that there's not already a page at that virtual
-	   address, then map our page there. */
-	return (pagedir_get_page (t->pagedir, upage) == NULL
-			&& pagedir_set_page (t->pagedir, upage, kpage, writable));
-}
-
-/* Returns a hash value for frame f. */
-unsigned
-sup_page_hash (const struct hash_elem *p_, void *aux UNUSED)
-{
-  const struct sup_page *p = hash_entry (p_, struct sup_page, elem);
-  return hash_int ((int)p->vaddr);
-}
-
-/* Returns true if frame a precedes frame b. */
-bool
-sup_page_less (const struct hash_elem *a_, const struct hash_elem *b_,
-           void *aux UNUSED)
-{
-  const struct sup_page *a = hash_entry (a_, struct sup_page, elem);
-  const struct sup_page *b = hash_entry (b_, struct sup_page, elem);
-
-  return a->vaddr < b->vaddr;
-}

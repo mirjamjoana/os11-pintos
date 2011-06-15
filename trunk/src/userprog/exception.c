@@ -4,6 +4,8 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "vm/page.h"
+#include <stdio.h>
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -156,10 +158,11 @@ page_fault (struct intr_frame *f)
 		  /* TODO swap in page / load file */
 		  if(DEBUG) printf("got pagefault for address %x\n", (unsigned int) fault_addr);
 
-		  /* back to interrupt handler */
-		  return;
+		  /* check the supplemental page table */
+		  if(find_and_load_page(fault_addr))
+			  return;
 	  }
-	  else if (is_legal_stack_growth())
+	  else if (is_legal_stack_growth(&f->esp))
 	  {
 		  /* TODO grow stack */
 		  if(DEBUG) printf("growing stack");
