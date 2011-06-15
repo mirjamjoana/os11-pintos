@@ -102,6 +102,7 @@ struct thread
     struct thread * parent;				/* parent of the this thread */
     struct list children;				/* List of children (including exit status). */
     struct list file_descriptors;		/* List of file descriptors. */
+    struct list mappings;               /* List of mapped files */
     unsigned int fd_next_id;			/* Consecutively numbered identifier for file descriptors */
 
     /* Shared between thread.c and synch.c. */
@@ -144,6 +145,7 @@ struct file_descriptor_elem
     int file_descriptor;				/* file handler number */
     mapid_t mapid;                        /* mapping identifier */
     struct file *file; 					/* file link */
+    void *addr;                         /* virtual address of mapping */
   };
 
 /* If false (default), use round-robin scheduler.
