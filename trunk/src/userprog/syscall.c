@@ -414,7 +414,7 @@ handle_mmap(struct intr_frame *f UNUSED)
 	mapid_t mapid = mmap(fd, addr);
 	
 	/* return position */
-	syscall_set_return_value(f, (mapid_t) mapid);
+	syscall_set_return_value(f, (int) mapid);
 
 	/* release file system lock */
 	lock_release(&filesystem_lock);
