@@ -13,6 +13,7 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "devices/shutdown.h"
+#include "vm/page.h"
 
 #define CONSOLE_BUFFER_SIZE 100
 #define MAX_OPEN_FILES 128
@@ -938,11 +939,12 @@ mmap (int fd, void *addr)
 			    /* allocate pages */
 		        page_start = (void*) get_multiple_user_pages(PAL_ZERO, (size / PGSIZE));
 			} 
-			
-			/* get threads file descriptors */
-	        struct list* file_descriptors = &(thread_current()->file_descriptors);
+				   
             mapid_t mapid = -1;
             
+	        /* get threads file descriptors */
+	        struct list* file_descriptors = &(thread_current()->file_descriptors);
+
 	        /* loop variables */
 	        struct list_elem *e;
 	        struct file_descriptor_elem *fde;
@@ -953,12 +955,23 @@ mmap (int fd, void *addr)
 		        /* fetch list element */
 		        fde = list_entry (e, struct file_descriptor_elem, elem);
 
-		        /* if the right file descriptor has been found fetch mapid */
+		        /* if the right file descriptor has been found map file */
 		        if (fde->file_descriptor == fd)
 		        {
+			        fde->mapid = fde->file_descriptor;
 			        mapid = fde->mapid;
+			        
+			        struct list* mappings = &(thread_current()->mappings);
+			        
+			        /* map file to pages */
+	                // TODO
+			        
+			        /* insert new mapped file desciptor into list of mappings */
+		            list_push_front(mappings, &fde->elem);
 		        }
 	        }
+	        
+	        
 			
 			/* TODO */
 			return mapid;	
@@ -993,9 +1006,29 @@ munmap (mapid_t mapping)
 		     mapid = fde->mapid;
 	     }
 	     if (mapid != -1) {
-	        /* TODO: check whether this is a mapping id that was returned by a 
-	        previous call of mmap
-	        TODO: write all pages back to the file: free_multiple_user_pages() */
+	     
+	        /* check whether this is a mapping id that was returned by a 
+	        previous call of mmap */
+	        struct list* mappings = &(thread_current()->mappings);
+	        struct file_descriptor_elem *mapped;
+	        
+	        /* search matching file */
+	        for (e = list_begin (mappings); e != list_end (mappings); e = list_next(e))
+	        {
+		        /* fetch list element */
+		        mapped = list_entry (e, struct file_descriptor_elem, elem);
+
+		        /* if the right file descriptor has been found return file */
+		        if (mapped->mapid == mapping)
+		        {
+			        // TODO write pages back to file
+			        
+			        /* remove mapping */
+			        list_remove(&(mapped->elem));
+		        }
+	        }
+	        
+	        /* TODO: write all pages back to the file: free_multiple_user_pages() */
 	     }
 	     else {
 	        return;
