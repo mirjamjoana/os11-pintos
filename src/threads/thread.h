@@ -142,7 +142,7 @@ struct file_descriptor_elem
   {
     struct list_elem elem;				/* list dummy */
     int file_descriptor;				/* file handler number */
-    mapid_t mapid_t;                        /* mapping identifier */
+    mapid_t mapid;                        /* mapping identifier */
     struct file *file; 					/* file link */
   };
 

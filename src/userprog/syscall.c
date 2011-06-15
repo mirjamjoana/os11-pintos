@@ -938,11 +938,30 @@ mmap (int fd, void *addr)
 			    /* allocate pages */
 		        page_start = (void*) get_multiple_user_pages(PAL_ZERO, (size / PGSIZE));
 			} 
-			/* TODO */
-			/* fd->mapid_t = ... */
+			
+			/* get threads file descriptors */
+	        struct list* file_descriptors = &(thread_current()->file_descriptors);
+            mapid_t mapid = -1;
+            
+	        /* loop variables */
+	        struct list_elem *e;
+	        struct file_descriptor_elem *fde;
+
+	        /* search matching file */
+	        for (e = list_begin (file_descriptors); e != list_end (file_descriptors); e = list_next(e))
+	        {
+		        /* fetch list element */
+		        fde = list_entry (e, struct file_descriptor_elem, elem);
+
+		        /* if the right file descriptor has been found fetch mapid */
+		        if (fde->file_descriptor == fd)
+		        {
+			        mapid = fde->mapid;
+		        }
+	        }
 			
 			/* TODO */
-			return -1;	
+			return mapid;	
 		}
 	}
 }
@@ -952,7 +971,34 @@ mmap (int fd, void *addr)
 returned by a previous call to mmap by the same process that has not yet been 
 unmapped.  */
 void 
-munmap (mapid_t mapping)
-{
-    /* TODO */
+munmap (mapid_t mapping) 
+{   
+    /* get threads file descriptors */
+    struct list* file_descriptors = &(thread_current()->file_descriptors);
+    mapid_t mapid = -1;
+           
+    /* loop variables */
+    struct list_elem *e;
+    struct file_descriptor_elem *fde;
+
+    /* search matching file */
+    for (e = list_begin (file_descriptors); e != list_end (file_descriptors); e = list_next(e))
+    {
+	     /* fetch list element */
+	     fde = list_entry (e, struct file_descriptor_elem, elem);
+
+	     /* if the right file descriptor has been found fetch mapid */
+	     if (fde->mapid == mapping)
+	     {
+		     mapid = fde->mapid;
+	     }
+	     if (mapid != -1) {
+	        /* TODO: check whether this is a mapping id that was returned by a 
+	        previous call of mmap
+	        TODO: write all pages back to the file: free_multiple_user_pages() */
+	     }
+	     else {
+	        return;
+	     }
+     }
 }
