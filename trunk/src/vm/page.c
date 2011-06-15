@@ -9,6 +9,7 @@
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 
+static bool install_lazy_user_page (void *upage, void *kpage, bool writable);
 
 void *
 get_multiple_user_pages(enum palloc_flags flags, size_t page_cnt)
@@ -133,7 +134,7 @@ install_user_page (void *upage, void *kpage, bool writable)
 }
 
 static bool
-install_lazy_user_page ()
+install_lazy_user_page (void *upage, void *kpage, bool writable)
 {
 	struct thread *t = thread_current ();
 
