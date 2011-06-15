@@ -69,7 +69,7 @@ create_lazy_user_page (struct file* file, struct Elf32_Ehdr *ehdr)
 	ASSERT(hash_replace (&thread_current()->sup_page_table, &p->elem) == NULL);
 
 	/* create page dir dummy */
-	ASSERT(install_user_page(p->vaddr,(void *) 0,true));
+	ASSERT(install_lazy_user_page(p->vaddr,(void *) 0,true));
 
 	/* get page table entry */
 	uint32_t *pte = get_pte(thread_current()->pagedir, p->vaddr);
@@ -132,10 +132,15 @@ install_user_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
-static void
+static bool
 install_lazy_user_page ()
 {
+	struct thread *t = thread_current ();
 
+	/* Verify that there's not already a page at that virtual
+	   address, then map our page there. */
+	return (pagedir_get_page (t->pagedir, upage) == NULL
+			&& pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
 /* Returns a hash value for frame f. */
