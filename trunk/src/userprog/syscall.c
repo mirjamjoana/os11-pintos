@@ -916,8 +916,12 @@ mmap (int fd, void *addr)
 		return -1;
 	}
 	/* fails if addr is zero */
-	else if (addr == 0) {
+	else if (addr == NULL) {
 		return -1;
+	}
+	/* checks whether address is page-aligned*/
+	else if ((uint32_t) addr % PGSIZE != 0) {
+	    return -1;
 	}
 	switch(fd) 
 	{
