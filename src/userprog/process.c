@@ -123,7 +123,7 @@ start_process (void *command_line_input)
 
 	/* aquire file lock, load and release */
 	lock_acquire(&filesystem_lock);
-	success = load (file_name, &if_.eip, &if_.esp);
+	success = lazy_load (file_name, &if_.eip, &if_.esp);
 	lock_release(&filesystem_lock);
 
 	/* If load failed, quit. */
