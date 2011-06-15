@@ -930,21 +930,31 @@ mmap (int fd, void *addr)
 		default: 
 		{
 		    size_t size = filesize(fd);
+		    int page_count = 0;
+		    
+		    mapid_t mapid = MAP_FAILED;
 
             void *page_start; 
-		    /* checks whether the file fits into a multiple of pages */
-		     if (size % PGSIZE != 0) {
-			
-		        /* allocate all fully occupied pages */
-		        page_start = (void*) get_multiple_user_pages(PAL_ZERO, ((size / PGSIZE) + 1));
+            
+		    /* computes the number of pages that are necessary */
+		    if (size % PGSIZE != 0) {
+			    page_count = ((size / PGSIZE) + 1);
 			}
 			else {
-			    /* allocate pages */
-		        page_start = (void*) get_multiple_user_pages(PAL_ZERO, (size / PGSIZE));
-			} 
-				   
-            mapid_t mapid = -1;
-            
+			    page_count = (size / PGSIZE);
+			}
+			
+			int i;
+			/* check whether there is any overlapping */
+			for (i = 0; i < page_count; i++) {
+			    if (pagedir_get_page (thread_current()->pagedir, addr + (i * PGSIZE)) != NULL)
+			        return MAP_FAILED;
+			 }
+			 
+			/* allocate pages */
+			/* TODO richtige methode (+ lazy load) verwenden und file direkt übergeben */
+		    page_start = (void*) get_multiple_user_pages(PAL_ZERO, page_count);
+				               
 	        /* get threads file descriptors */
 	        struct list* file_descriptors = &(thread_current()->file_descriptors);
 
@@ -965,16 +975,14 @@ mmap (int fd, void *addr)
 			        mapid = fde->mapid;
 			        
 			        struct list* mappings = &(thread_current()->mappings);
-			        
-			        /* map file to pages */
-	                // TODO
+	                
+	                /* set page address */
+	                fde->addr = page_start;
 			        
 			        /* insert new mapped file desciptor into list of mappings */
 		            list_push_front(mappings, &fde->elem);
 		        }
 	        }
-	        
-	        
 			
 			/* TODO */
 			return mapid;	
@@ -1008,7 +1016,7 @@ munmap (mapid_t mapping)
 	     {
 		     mapid = fde->mapid;
 	     }
-	     if (mapid != -1) {
+	     if (mapid != MAP_FAILED) {
 	     
 	        /* check whether this is a mapping id that was returned by a 
 	        previous call of mmap */
