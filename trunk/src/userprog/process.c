@@ -71,6 +71,11 @@ process_execute (const char *command_line_input)
 static void
 start_process (void *command_line_input)
 {
+	#if VM
+	  /* intialize supplemental page table */
+	  hash_init(&t->sup_page_table, sup_page_hash, sup_page_less, NULL);
+	#endif
+
     /* loop variables */
     char *token, *save_ptr;
 

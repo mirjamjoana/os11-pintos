@@ -566,11 +566,6 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init (&(t->children));
 
   list_push_back (&all_list, &t->allelem);
-
-#if VM
-  /* intialize supplemental page table */
-  hash_init(&t->sup_page_table, sup_page_hash, sup_page_less, NULL);
-#endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
