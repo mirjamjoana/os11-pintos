@@ -622,6 +622,7 @@ lazy_load (const char *file_name, void (**eip) (void), void **esp)
 bool
 load_user_code_and_data(struct file* file, struct Elf32_Ehdr *ehdr)
 {
+	if(DEBUG) printf("Copy user code and data to stack\n");
 	bool success = false;
 
 	/* Read program headers. */

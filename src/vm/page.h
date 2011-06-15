@@ -7,6 +7,7 @@
 #include "userprog/process.h"
 
 #define STACK_GROW_LIMIT 8 /* stack grow max 32 bytes at once (8 x 32 bit)*/
+#define USER_CODE_START 0x08048000
 
 /*
  * The supplemental page table is used for at least two purposes.
@@ -22,16 +23,18 @@
 /* info about the file on disk OR page on swap disk */
 struct sup_page
 {
-	struct hash_elem elem; 	/* the hash element */
+	struct hash_elem elem; 		/* the hash element */
 
-	void* vaddr;			/* kernel address if swap, id if disk */
+	void* vaddr;				/* kernel address if swap, id if disk */
 
-	bool swap;				/* 1 => swap, 0 => disk */
-	bool isExec;			/* 1 => exec file of the current process  */
+	bool swap;					/* 1 => swap, 0 => disk */
 
-	struct file * f;		/* file / page link */
-	uint32_t offset; 		/* internal file offset */
-	uint32_t length; 		/* size of the file contents */
+	bool isExec;				/* 1 => exec file of the current process  */
+	struct Elf32_Ehdr *ehdr;	/* ELF header */
+
+	struct file * f;			/* file / page link */
+	uint32_t offset; 			/* internal file offset */
+	uint32_t length; 			/* size of the file contents */
 };
 
 /* standard page allocation and release */
@@ -57,5 +60,8 @@ bool install_user_page (void *upage, void *kpage, bool writable);
 /* hash functions */
 unsigned sup_page_hash (const struct hash_elem *p_, void *aux);
 bool sup_page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux);
+
+/* page fault handling */
+bool find_and_load_page(void* vaddr);
 
 #endif
