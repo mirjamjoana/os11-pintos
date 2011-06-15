@@ -379,39 +379,9 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
-
+
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
-
-/* ELF types.  See [ELF1] 1-2. */
-typedef uint32_t Elf32_Word, Elf32_Addr, Elf32_Off;
-typedef uint16_t Elf32_Half;
-
-/* For use with ELF types in printf(). */
-#define PE32Wx PRIx32   /* Print Elf32_Word in hexadecimal. */
-#define PE32Ax PRIx32   /* Print Elf32_Addr in hexadecimal. */
-#define PE32Ox PRIx32   /* Print Elf32_Off in hexadecimal. */
-#define PE32Hx PRIx16   /* Print Elf32_Half in hexadecimal. */
-
-/* Executable header.  See [ELF1] 1-4 to 1-8.
-   This appears at the very beginning of an ELF binary. */
-struct Elf32_Ehdr
-  {
-    unsigned char e_ident[16];
-    Elf32_Half    e_type;
-    Elf32_Half    e_machine;
-    Elf32_Word    e_version;
-    Elf32_Addr    e_entry;
-    Elf32_Off     e_phoff;
-    Elf32_Off     e_shoff;
-    Elf32_Word    e_flags;
-    Elf32_Half    e_ehsize;
-    Elf32_Half    e_phentsize;
-    Elf32_Half    e_phnum;
-    Elf32_Half    e_shentsize;
-    Elf32_Half    e_shnum;
-    Elf32_Half    e_shstrndx;
-  };
 
 /* Program header.  See [ELF1] 2-2 to 2-4.
    There are e_phnum of these, starting at file offset e_phoff
@@ -572,7 +542,150 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   return success;
 }
-
+
+/* Lazy loads an ELF executable from FILE_NAME into the current thread.
+   Stores the executable's entry point into *EIP
+   and its initial stack pointer into *ESP.
+   Returns true if successful, false otherwise. */
+bool
+lazy_load (const char *file_name, void (**eip) (void), void **esp)
+{
+  struct thread *t = thread_current ();
+  struct Elf32_Ehdr *ehdr = malloc(sizeof(*ehdr));
+  struct file *file = NULL;
+
+  bool success = false;
+
+
+  /* Allocate and activate page directory. */
+  t->pagedir = pagedir_create ();
+  if (t->pagedir == NULL)
+    goto done;
+  process_activate ();
+
+  /* Open executable file. */
+  file = filesys_open (file_name);
+  if (file == NULL)
+    {
+      printf ("load: %s: open failed\n", file_name);
+      goto done;
+    }
+
+  /* Read and verify executable header. */
+  if (file_read (file, ehdr, sizeof *ehdr) != sizeof *ehdr
+      || memcmp (ehdr->e_ident, "\177ELF\1\1\1", 7)
+      || ehdr->e_type != 2
+      || ehdr->e_machine != 3
+      || ehdr->e_version != 1
+      || ehdr->e_phentsize != sizeof (struct Elf32_Phdr)
+      || ehdr->e_phnum > 1024)
+    {
+      printf ("load: %s: error loading executable\n", file_name);
+      goto done;
+    }
+
+
+  if(DEBUG) printf("creating lazy user page\n");
+  create_lazy_user_page(file, ehdr);
+
+  // TODO call load_user_code_and_data() from page_fault -> page_load(vaddr*)
+
+  /* Set up stack. */
+  if (!setup_stack (esp))
+    goto done;
+
+  /* Start address. */
+  *eip = (void (*) (void)) ehdr->e_entry;
+
+  success = true;
+
+ done:
+  /* We arrive here whether the load is successful or not. */
+
+ /* Close file if something went wrong,
+  * deny writes on the file if everthing's fine. */
+  if(!success)
+	  file_close (file);
+  else {
+	  t->executable = file;
+	  file_deny_write(file);
+  }
+
+  return success;
+}
+
+bool
+load_user_code_and_data(struct file* file, struct Elf32_Ehdr *ehdr)
+{
+	bool success = false;
+
+	/* Read program headers. */
+	off_t file_ofs = ehdr->e_phoff;
+	int i;
+	for (i = 0; i < ehdr->e_phnum; i++)
+	{
+	  struct Elf32_Phdr phdr;
+
+	  if (file_ofs < 0 || file_ofs > file_length (file))
+		goto done;
+	  file_seek (file, file_ofs);
+
+	  if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
+		goto done;
+	  file_ofs += sizeof phdr;
+	  switch (phdr.p_type)
+		{
+		case PT_NULL:
+		case PT_NOTE:
+		case PT_PHDR:
+		case PT_STACK:
+		default:
+		  /* Ignore this segment. */
+		  break;
+		case PT_DYNAMIC:
+		case PT_INTERP:
+		case PT_SHLIB:
+		  goto done;
+		case PT_LOAD:
+		  if (validate_segment (&phdr, file))
+			{
+			  bool writable = (phdr.p_flags & PF_W) != 0;
+			  uint32_t file_page = phdr.p_offset & ~PGMASK;
+			  uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
+			  uint32_t page_offset = phdr.p_vaddr & PGMASK;
+			  uint32_t read_bytes, zero_bytes;
+			  if (phdr.p_filesz > 0)
+				{
+				  /* Normal segment.
+					 Read initial part from disk and zero the rest. */
+				  read_bytes = page_offset + phdr.p_filesz;
+				  zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)
+								- read_bytes);
+				}
+			  else
+				{
+				  /* Entirely zero.
+					 Don't read anything from disk. */
+				  read_bytes = 0;
+				  zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
+				}
+			  if (!load_segment (file, file_page, (void *) mem_page,
+								 read_bytes, zero_bytes, writable))
+				goto done;
+			}
+		  else
+			goto done;
+		  break;
+		}
+	}
+
+	success = true;
+
+done:
+	return success;
+}
+
+
 /* load() helpers. */
 
 

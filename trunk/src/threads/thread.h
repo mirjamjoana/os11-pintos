@@ -8,6 +8,8 @@
 #include "threads/synch.h"
 #include <hash.h>
 
+#define DEBUG 1
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -116,8 +118,8 @@ struct thread
 #endif
 
 #ifdef VM
-    /* Owned by userprog/process.c. */
-    struct hash sup_pages;                  /* Supplemental Page Table. */
+    /* Owned by vm/page.c. */
+    struct hash sup_page_table;         /* Supplemental Page Table. */
 #endif
 
     /* Owned by thread.c. */
