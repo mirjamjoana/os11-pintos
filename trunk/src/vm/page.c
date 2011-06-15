@@ -64,7 +64,7 @@ create_lazy_user_page (struct file* file, struct Elf32_Ehdr *ehdr)
 	p->f = file;
 	p->isExec = true;
 	p->swap = false;
-	p->vaddr = (void *) ehdr->e_entry;
+	p->vaddr = pg_round_down((void *)ehdr->e_entry);
 
 	/* insert into sup page table */
 	ASSERT(hash_replace (&thread_current()->sup_page_table, &p->elem) == NULL);
