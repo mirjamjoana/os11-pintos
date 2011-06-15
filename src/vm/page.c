@@ -69,8 +69,9 @@ create_lazy_user_page (struct file* file, struct Elf32_Ehdr *ehdr)
 	/* insert into sup page table */
 	ASSERT(hash_replace (&thread_current()->sup_page_table, &p->elem) == NULL);
 
-	/* create page dir dummy */
-	ASSERT(install_lazy_user_page(p->vaddr,(void *) 0,true));
+	/* create page dir dummy pointing to first kernel page.
+	 * ASSUMPTION: first kernel page is always zeroed */
+	ASSERT(install_lazy_user_page(p->vaddr, PHYS_BASE, true));
 
 	/* get page table entry */
 	uint32_t *pte = get_pte(thread_current()->pagedir, p->vaddr);
