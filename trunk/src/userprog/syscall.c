@@ -913,15 +913,15 @@ mmap (int fd, void *addr)
 {
 	/* fails if file has a length of zero bytes */
 	if (filesize(fd) == 0) {
-		return -1;
+		return MAP_FAILED;
 	}
 	/* fails if addr is zero */
 	else if (addr == NULL) {
-		return -1;
+		return MAP_FAILED;
 	}
 	/* checks whether address is page-aligned*/
 	else if (pg_ofs(addr) != 0) {
-	    return -1;
+	    return MAP_FAILED;
 	}
 	switch(fd) 
 	{
