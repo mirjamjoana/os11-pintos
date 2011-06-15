@@ -22,7 +22,7 @@ enum thread_status
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 typedef int mapid_t;
-#define MAPID_ERROR ((mapid_t) -1)          /* Error value for mapid_t. */
+#define MAP_FAILED ((mapid_t) -1)          /* Error value for mapid_t. */
 
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
