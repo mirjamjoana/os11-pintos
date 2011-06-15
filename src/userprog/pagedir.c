@@ -85,6 +85,16 @@ lookup_page (uint32_t *pd, const void *vaddr, bool create)
   return &pt[pt_no (vaddr)];
 }
 
+/* Returns the address of the page table entry for virtual
+   user address UADDR in page directory PD.
+   If PD does not have a page table for UADDR a null
+   pointer is returned. */
+uint32_t *
+get_pte (uint32_t *pd, const void *uaddr)
+{
+  return lookup_page(pd, uaddr, false);
+}
+
 /* Adds a mapping in page directory PD from user virtual page
    UPAGE to the physical frame identified by kernel virtual
    address KPAGE.
