@@ -920,7 +920,7 @@ mmap (int fd, void *addr)
 		return -1;
 	}
 	/* checks whether address is page-aligned*/
-	else if ((uint32_t) addr % PGSIZE != 0) {
+	else if (pg_ofs(addr) != 0) {
 	    return -1;
 	}
 	switch(fd) 
