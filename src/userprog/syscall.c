@@ -426,7 +426,7 @@ handle_munmap(struct intr_frame *f UNUSED)
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
 
-	if(DEBUG) printf("mmap\n");
+	if(DEBUG) printf("munmap\n");
 
 	mapid_t mapping = (int) syscall_get_argument(f, 0); /* map id */
 
@@ -1051,12 +1051,13 @@ munmap (mapid_t map_id)
 		{
 			/* write back */
 			file_write(file, kpage, size);
+
+			/* free page */
+			free_user_page(kpage);
+
 		} else {
 			file_seek(file, file_tell(file) + size);
 		}
-
-		/* free page */
-		free_user_page(kpage);
 
 		/* decrement left length */
 		length_left -= size;
