@@ -49,6 +49,7 @@ void destroy_user_pages(void);
 /* lazy allocation */
 void create_lazy_user_page (struct file *file, struct Elf32_Ehdr *ehdr);
 void create_lazy_mmap_page (struct file* file, uint32_t file_length, uint32_t offset, void* upage);
+void delete_lazy_mmap_page (void* upage);
 
 /* stack grow methods */
 bool is_legal_stack_growth (void *fault_addr, void* esp);

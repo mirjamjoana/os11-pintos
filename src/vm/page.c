@@ -36,17 +36,18 @@ free_multiple_user_pages(void * pages, size_t page_cnt)
 	unsigned i;
 	uint32_t * pte;
 
+	/*
 	for(i = 0; i < page_cnt; i++)
 	{
 		pte = get_pte(thread_current()->pagedir, (const void *) pages + i * PGSIZE);
 
-		/* if page is present */
 		if(*pte & PTE_P)
 		{
 
 		}
 
 	}
+	 */
 
 	/* delete hash entry */
 	unregister_frames(pages, page_cnt);
@@ -276,6 +277,13 @@ create_lazy_mmap_page (struct file* file, uint32_t file_length, uint32_t offset,
 
 	/* set vaddress to upage */
 	*pte = (*pte & PTE_FLAGS) | ((uint32_t)upage & PTE_ADDR);
+}
+
+void delete_lazy_mmap_page(void* upage)
+{
+	struct sup_page * page = page_lookup ((const void*) upage);
+
+	hash_delete(&thread_current()->sup_page_table, &page->elem);
 }
 
 bool
