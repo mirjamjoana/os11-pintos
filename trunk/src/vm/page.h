@@ -9,6 +9,7 @@
 #define STACK_GROW_LIMIT 8 /* stack grow max 32 bytes at once (8 x 32 bit)*/
 #define MAX_USER_STACK_SIZE 0x800000
 #define USER_CODE_START 0x08048000
+#define SWAP 0
 
 /*
  * The supplemental page table is used for at least two purposes.
@@ -20,6 +21,30 @@
  *
  * - save hash value in virtual address part of the pte
  */
+ 
+//to identify where the page should be
+enum page_type
+  {
+        PAGE_FRAME,
+        PAGE_SWAP,
+        PAGE_MMAP
+};
+
+struct page {
+        //pointer to the user memory page in the frame
+        void * vaddr;
+        // we use paddr to save the physical address or the SWAP slot
+        void * paddr;
+        struct hash_elem hash_elem;
+        bool writable;
+        enum page_type type;
+        //this is for memory mapped files
+        int mapid;
+        off_t readbytes;
+        off_t offset;
+};
+
+
 
 /* info about the file on disk OR page on swap disk */
 struct sup_page
@@ -43,6 +68,10 @@ void *get_multiple_user_pages (enum palloc_flags, size_t page_cnt);
 void free_user_page (void * page);
 void free_multiple_user_pages (void * pages, size_t page_cnt);
 
+const char * page_type_name (enum page_type type);
+void * get_vaddr_page (void *,struct thread *);
+
+
 /* page destructor */
 void destroy_user_pages(void);
 
@@ -65,5 +94,11 @@ bool sup_page_less (const struct hash_elem *a_, const struct hash_elem *b_, void
 /* page fault handling */
 bool find_and_load_page(void* vaddr);
 bool load_mmap_data(struct sup_page* p);
+
+/* swap methods */
+void page_swap_in (void * ,struct thread *);
+void page_swap_out (void * );
+
+
 
 #endif
