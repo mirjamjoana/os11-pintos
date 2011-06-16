@@ -28,10 +28,39 @@ Mirjam Neu-Weigand <mirjam.neuweigand@gmail.com>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In page.h:
+
+struct sup_page
+{
+	struct hash_elem elem; 		/* the hash element */
+
+	void* vaddr;				/* kernel address if swap, id if disk */
+
+	bool swap;					/* 1 => swap, 0 => disk */
+
+	bool isExec;				/* 1 => exec file of the current process  */
+	struct Elf32_Ehdr *ehdr;	/* ELF header */
+
+	struct file * f;			/* file / page link */
+	uint32_t offset; 			/* internal file offset */
+	uint32_t length; 			/* size of the file contents */
+};
+
+This is the supplemental page table, which supplements the page table with 
+additional data about each page.
+
 ---- ALGORITHMS ----
 
 >> A2: In a few paragraphs, describe your code for locating the frame,
 >> if any, that contains the data of a given page.
+
+When we need to lookup a frame for a virtual address, the function page_lookup in 
+page.c is called, which takes the virtual address and searches for it in the supplemental 
+page table since it is the hash key in the table.
+It returns the page which contains the physical address if any. If the type indicates 
+that there is no frame connected to it we have to load a frame.
+The physical address is the key in the frame hash table and I can call frame_lookup in frame.c to get the corresponding frame back.
+A check of the page type would be necessary since only PAGE_FRAME types have a frame.
 
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
