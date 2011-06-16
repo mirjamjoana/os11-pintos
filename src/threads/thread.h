@@ -148,6 +148,7 @@ struct file_descriptor_elem
     mapid_t mapid;                        /* mapping identifier */
     struct file *file; 					/* file link */
     void *addr;                         /* virtual address of mapping */
+    int page_count;                  /* number of mapped pages */
   };
 
 /* If false (default), use round-robin scheduler.
