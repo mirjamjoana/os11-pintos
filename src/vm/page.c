@@ -203,15 +203,8 @@ grow_stack (void *fault_addr)
 		ASSERT (kpage != NULL);
 
 		ASSERT (install_user_page (pg_round_down(fault_addr), kpage, true));
-/*
-		if (!success)
-		{
-			free_user_page (kpage);
-			thread_exit();
-		}
-*/
-		lock_release(&user_frames_lock);
 
+		lock_release(&user_frames_lock);
 	}
 }
 

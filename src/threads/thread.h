@@ -120,6 +120,7 @@ struct thread
 #ifdef VM
     /* Owned by vm/page.c. */
     struct hash sup_page_table;         /* Supplemental Page Table. */
+    void** esp;							/* User stack pointer. */
 #endif
 
     /* Owned by thread.c. */
