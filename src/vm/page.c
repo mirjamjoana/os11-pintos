@@ -94,7 +94,7 @@ is_legal_stack_growth (void *fault_addr, void* esp)
 {	
 	if(DEBUG) printf("Check for legal stack growth. current ESP: %x - access esp: %x", (uint32_t)fault_addr, (uint32_t)esp);
 
-	if(esp - fault_addr <= STACK_GROW_LIMIT)
+	if(esp - fault_addr <= STACK_GROW_LIMIT && esp - fault_addr > 0)
 		return true;
 
 	return false;
