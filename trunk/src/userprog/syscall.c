@@ -14,6 +14,7 @@
 #include "filesys/file.h"
 #include "devices/shutdown.h"
 #include "vm/page.h"
+#include "threads/pte.h"
 
 #define CONSOLE_BUFFER_SIZE 100
 #define MAX_OPEN_FILES 128
@@ -43,7 +44,7 @@ static void* syscall_get_argument(const struct intr_frame *f, unsigned int arg_n
 static void syscall_set_return_value (struct intr_frame *f, int ret_value);
 static void* syscall_get_kernel_address (const void *uaddr);
 static struct file* syscall_get_file(int file_descriptor);
-static void syscall_check_pointer(const void * ptr);
+static void syscall_check_pointer(const void * ptr, bool write);
 
 void halt (void);
 void exit (int status);
@@ -181,7 +182,7 @@ handle_exec(struct intr_frame *f)
 	char* cmd_line = (char *) syscall_get_argument(f, 0); /* command line input */
 
 	/* check pointer */
-	syscall_check_pointer((const void *)cmd_line);
+	syscall_check_pointer((const void *)cmd_line, false);
 
 	/* switch to exec method and save process id pid */
 	int pid = exec(cmd_line);
@@ -213,7 +214,7 @@ handle_create(struct intr_frame *f UNUSED)
 	if(DEBUG) printf("create\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
-	syscall_check_pointer((const void *) file);	/* check the file */
+	syscall_check_pointer((const void *) file, false);	/* check the file */
 	
 	unsigned int initial_size = (unsigned int) syscall_get_argument(f, 1); /* initial file size */
 
@@ -237,7 +238,7 @@ handle_remove(struct intr_frame *f)
 	if(DEBUG) printf("remove\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
-	syscall_check_pointer((const void *)file);	/* check the file */
+	syscall_check_pointer((const void *)file, false);	/* check the file */
 
 	/* remove file and save success */
 	bool success = remove(file);
@@ -258,7 +259,7 @@ handle_open(struct intr_frame *f)
 	if(DEBUG) printf("open\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
-	syscall_check_pointer((const void *) file);	/* check the file */
+	syscall_check_pointer((const void *) file, false);	/* check the file */
 
 	/* remove file and save success */
 	int handle = open(file);
@@ -302,7 +303,7 @@ handle_read(struct intr_frame *f)
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	
 	void * buffer = (void *) syscall_get_argument(f, 1); /* target buffer pointer */
-	syscall_check_pointer(buffer);	/* check the buffer */
+	syscall_check_pointer(buffer, true);	/* check the buffer */
 
 	unsigned int size = (unsigned int) syscall_get_argument(f, 2); /* target buffer size */
 
@@ -325,7 +326,7 @@ handle_write(struct intr_frame *f)
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	const void *buffer = (const void*) syscall_get_argument(f, 1); /* target buffer pointer */
-	syscall_check_pointer(buffer);	/* check the buffer */
+	syscall_check_pointer(buffer, true);	/* check the buffer */
 
 	unsigned size = (unsigned int) syscall_get_argument(f, 2); /* target buffer size */
 
@@ -407,7 +408,7 @@ handle_mmap(struct intr_frame *f UNUSED)
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	void *addr = (void*) syscall_get_argument(f, 1); /* target mapping pointer */
 
-    syscall_check_pointer(addr);	/* check the address */
+    syscall_check_pointer(addr, true);	/* check the address */
 
 	/* map file fd to addr */
 	mapid_t mapid = mmap(fd, addr);
@@ -831,15 +832,30 @@ syscall_set_return_value (struct intr_frame *f, int ret_value)
 
 /* Checks whether any given pointer is valid */
 static void
-syscall_check_pointer (const void *ptr) 
+syscall_check_pointer (const void *uaddr, bool write)
 {
-	syscall_get_kernel_address(ptr);
+	/* check if address exists, exits if not */
+	void *kaddr = syscall_get_kernel_address(uaddr);
+
+	/* before we write check if write is enabled */
+	if(kaddr != NULL && write)
+	{
+		uint32_t *pte = get_pte (thread_current()->pagedir, uaddr);
+
+		/* if read only exit */
+		if(!(*pte & PTE_W))
+		{
+			thread_current()->exit_status = -1;
+			thread_exit();
+		}
+	}
+
 }
 
 
 /*
  * Gets the kernel virtual space address of user space
- * address uaddr. Returns NULL if uaddr points to not
+ * address uaddr. Exits thread if uaddr points to not
  * accessible memory.
  */
 static void *
