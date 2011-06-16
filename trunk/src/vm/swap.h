@@ -2,8 +2,19 @@
 #define VM_SWAP_H
 
 /* swap pages */
+<<<<<<< .mine
+#ifndef VM_SWAP_H
+#define VM_SWAP_H
 
-/* initialize global swap table */
-void init_swap();
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
 
-#endif
+void init_swap (void);
+void get_swap (size_t , void *);
+size_t add_swap (void *);
+void swap_remove(size_t );
+
+#endif /* vm/swap.h */
+
+
