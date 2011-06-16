@@ -206,6 +206,7 @@ grow_stack (void *fault_addr)
 
 		lock_release(&user_frames_lock);
 	}
+
 }
 
 /* hash search */

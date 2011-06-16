@@ -856,17 +856,6 @@ syscall_check_pointer (const void *uaddr, bool write)
 		else
 			return;
 
-	} else {
-		if(DEBUG) printf("not found.\n");
-		/* check if syscall leads to uninitialized page */
-		if (is_legal_stack_growth((void*) uaddr, *thread_current()->esp))
-		{
-			/*grow stack */
-			grow_stack((void *)uaddr);
-
-			/* back to interrupt handler */
-			return;
-		}
 	}
 
 	/* pointer is invalid */
@@ -891,16 +880,12 @@ syscall_get_kernel_address (const void *uaddr)
 	if (pd == NULL || uaddr == NULL)
 	{
 		if(DEBUG) printf("Null pointer.\n");
-		current_thread->exit_status = -1;
-		thread_exit();
 	}
 
 	/* Checks whether UADDR points to unmapped memory and whether it is a user address */
 	else if ( uaddr < (void *) 0x08048000 /* - 64 * 1024 * 1024 */ || uaddr >= PHYS_BASE)
 	{
 		if(DEBUG) printf("Segmentation fault @ %x\n", (uint32_t) uaddr);
-		current_thread->exit_status = -1;
-		thread_exit();
 	}
 	else
 	{
@@ -909,9 +894,23 @@ syscall_get_kernel_address (const void *uaddr)
 		if(address != NULL)
 			return address;
 
-		current_thread->exit_status = -1;
-		thread_exit();
+		/* find out if stack growth is legal */
+		if(DEBUG) printf("Address not found. Trying stack grow.\n");
+
+		/* check if syscall leads to uninitialized page */
+		if (is_legal_stack_growth((void*) uaddr, *thread_current()->esp))
+		{
+			/*grow stack */
+			grow_stack((void *)uaddr);
+
+			/* back to syscall */
+			return pagedir_get_page(pd, uaddr);
+		}
 	}
+
+	current_thread->exit_status = -1;
+	thread_exit();
+
 }
 
 /*
