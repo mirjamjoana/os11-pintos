@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include <list.h>
+#include <string.h>
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
@@ -989,6 +990,7 @@ mmap (int fd, void *addr)
 		        {
 			        fde->mapid = fde->file_descriptor;
 			        mapid = fde->mapid;
+			        fde->page_count = page_count;
 			        
 			        struct list* mappings = &(thread_current()->mappings);
 	                
@@ -1016,6 +1018,8 @@ munmap (mapid_t mapping)
     /* get threads file descriptors */
     struct list* file_descriptors = &(thread_current()->file_descriptors);
     mapid_t mapid = -1;
+    int page_count = 0;
+    void* addr;
            
     /* loop variables */
     struct list_elem *e;
@@ -1027,35 +1031,40 @@ munmap (mapid_t mapping)
 	     /* fetch list element */
 	     fde = list_entry (e, struct file_descriptor_elem, elem);
 
-	     /* if the right file descriptor has been found fetch mapid */
+	     /* if the right file descriptor has been found fetch mapid, page_count and addr */
 	     if (fde->mapid == mapping)
 	     {
 		     mapid = fde->mapid;
-	     }
-	     if (mapid != MAP_FAILED) {
+		     page_count = fde->page_count;
+		     addr = fde->addr;
 	     
-	        /* check whether this is a mapping id that was returned by a 
-	        previous call of mmap */
-	        struct list* mappings = &(thread_current()->mappings);
-	        struct file_descriptor_elem *mapped;
-	        
-	        /* search matching file */
-	        for (e = list_begin (mappings); e != list_end (mappings); e = list_next(e))
-	        {
-		        /* fetch list element */
-		        mapped = list_entry (e, struct file_descriptor_elem, elem);
+	         if (mapid != MAP_FAILED) {
+	         
+	            /* check whether this is a mapping id that was returned by a 
+	            previous call of mmap */
+	            struct list* mappings = &(thread_current()->mappings);
+	            struct file_descriptor_elem *mapped_file;
+	            
+	            /* search matching file */
+	            for (e = list_begin (mappings); e != list_end (mappings); e = list_next(e))
+	            {
+		            /* fetch list element */
+		            mapped_file = list_entry (e, struct file_descriptor_elem, elem);
 
-		        /* if the right file descriptor has been found return file */
-		        if (mapped->mapid == mapping)
-		        {
-			        // TODO write pages back to file
-			        
-			        /* remove mapping */
-			        list_remove(&(mapped->elem));
-		        }
-	        }
-	        
-	        /* TODO: write all pages back to the file: free_multiple_user_pages() */
+		            /* if the right file descriptor has been found write pages back */
+		            if (mapped_file->mapid == mapping)
+		            {
+			            // TODO write pages back to file
+			            int i;
+			            for (i = 0; i <page_count; i++) {
+			                memcpy(fde->file, addr, PGSIZE);
+			            }
+			            
+			            /* remove mapping */
+			            list_remove(&(mapped_file->elem));
+		            }
+	            }
+	         }
 	     }
 	     else {
 	        return;
