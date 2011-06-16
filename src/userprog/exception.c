@@ -161,7 +161,7 @@ page_fault (struct intr_frame *f)
 	}
 
 	/* check if kernel page fault is form user space */
-	if (is_legal_stack_growth(fault_addr, f->esp))
+	if (is_legal_stack_growth(fault_addr, thread_current()->esp))
 	{
 		/*grow stack */
 		grow_stack(fault_addr);
