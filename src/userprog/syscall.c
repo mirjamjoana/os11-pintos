@@ -1032,6 +1032,8 @@ munmap (mapid_t map_id)
 	/* jump to file start */
 	file_seek(file, (off_t) 0);
 
+	if(DEBUG) printf("start unmapping files\n");
+
 	/* write pages back to file */
 	size_t size, length_left = length;
 	unsigned i;
@@ -1042,6 +1044,8 @@ munmap (mapid_t map_id)
 
 		/* check if page has ever been mapped */
 		kpage = pagedir_get_page(thread_current()->pagedir, current_uaddr);
+
+		if(DEBUG) printf("unmap kpage %x\n", (uint32_t) kpage);
 
 		if (length_left % PGSIZE != 0) {
 			size = length_left % PGSIZE;
@@ -1075,6 +1079,8 @@ munmap (mapid_t map_id)
 
 	/* free resources */
 	free(mmap_file);
+
+	if(DEBUG) printf("finished munmap\n");
 }
 
 

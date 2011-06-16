@@ -320,7 +320,9 @@ load_mmap_data(struct sup_page* p)
 	/* acquire file system lock */
 	lock_release(&filesystem_lock);
 
-	ASSERT(len == size)
+	if(DEBUG && len != size){
+		printf("read: %u, size: %u\n", (uint32_t) len, (uint32_t) size);
+	}
 	ASSERT(install_user_page(upage, kpage, true));
 
 	lock_release(&user_frames_lock);
