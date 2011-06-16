@@ -633,6 +633,7 @@ load_user_code_and_data(struct file* file, struct Elf32_Ehdr *ehdr)
 	int i;
 	for (i = 0; i < ehdr->e_phnum; i++)
 	{
+		if(DEBUG) printf("NEW PROGRAM HEADER\n");
 	  struct Elf32_Phdr phdr;
 
 	  if (file_ofs < 0 || file_ofs > file_length (file))
@@ -772,6 +773,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
   file_seek (file, ofs);
 
+	if(DEBUG) printf("Im going to read %u bytes and %u zeroes", read_bytes, zero_bytes);
+
+
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -785,24 +789,28 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Get a page of memory. */
       uint8_t *kpage = get_user_page(0x0);
-      if (kpage == NULL)
-        return false;
+      if (kpage == NULL){
+        if(DEBUG) printf("kpage null \n");
+	      return false;
+
+      }
 
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
           free_user_page (kpage);
-          return false; 
+          if(DEBUG) printf("file read failed.\n");
+	  return false; 
         }
 
       if(DEBUG && first) printf("writing first block @upage %x |  kpage %x\n", (uint32_t) upage, (uint32_t) kpage );
-	if(DEBUG) printf("loading segment\n");
+
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
       /* if this is the first code / data page
        * we have to update the page table entry
        * which we already created */
-      if(first)
+      if(false /*first*/)
       {
 
  	  /* fetch entry */
@@ -813,8 +821,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	  /* update kernel address and set present bit to 1 */
 
     	  /* set address */
-    	  *pte = *pte & PTE_FLAGS;
-    	  *pte = *pte | ((uint32_t)kpage & PTE_ADDR);
+    	  //*pte = *pte & PTE_FLAGS;
+    	  //*pte = *pte | ((uint32_t)kpage & PTE_ADDR);
 
     	  /* set present bit */
     	  *pte = *pte | PTE_P;
@@ -822,13 +830,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	  if(DEBUG) printf("pte-new: %x\n", *pte);
 
     	  /* register frame */
-    	  register_frame(upage, kpage);
+    	  //register_frame(upage, kpage);
       }
       else
       {
 		  /* Add the page to the process's address space. */
 		  if (!install_user_page (upage, kpage, writable))
 			{
+				if(DEBUG) printf("could not install kpage\n");
 			  free_user_page (kpage);
 			  return false;
 			}
