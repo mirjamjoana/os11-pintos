@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include "vm/page.h"
 #include "vm/frame.h"
+#include "vm/swap.h"
 #include "threads/palloc.h"
 #include "threads/pte.h"
 #include "threads/vaddr.h"
@@ -12,6 +13,25 @@
 
 static bool install_lazy_user_page (void *upage, void *kpage, bool writable);
 static struct sup_page *page_lookup (const void *address);
+
+struct page *page_lookup_swap (const void *address, struct thread *);
+
+
+//returns the name where the page is located
+const char *
+page_type_name (enum page_type type)
+{
+  static const char *page_type_names[3] =
+    {
+      "frame",
+      "swap",
+      "MMAP"
+    };
+
+  ASSERT (type < 3);
+  return page_type_names[type];
+}
+
 
 void *
 get_multiple_user_pages(enum palloc_flags flags, size_t page_cnt)
@@ -35,6 +55,7 @@ free_multiple_user_pages(void * pages, size_t page_cnt)
 
 	unsigned i;
 	uint32_t * pte;
+	
 
 	/*
 	for(i = 0; i < page_cnt; i++)
@@ -107,7 +128,7 @@ create_lazy_user_page (struct file* file, struct Elf32_Ehdr *ehdr)
 	*pte = (*pte & PTE_FLAGS) | (ehdr->e_entry & PTE_ADDR);
 
 }
-
+ 
 
 bool
 is_legal_stack_growth (void *fault_addr, void* esp)
@@ -244,41 +265,89 @@ page_lookup (const void *address)
   return e != NULL ? hash_entry (e, struct sup_page, elem) : NULL;
 }
 
-void
-create_lazy_mmap_page (struct file* file, uint32_t file_length, uint32_t offset, void* upage)
+<<<<<<< .mine
+/* Returns the frame containing the given address,
+   or a null pointer if no such page exists. */
+struct page *
+page_lookup_swap (const void *address, struct thread * t)
 {
-	ASSERT(offset % PGSIZE == 0);
-	ASSERT(pg_ofs(upage) == 0);
-
-	/* create sup pte */
-	struct sup_page*  p = (struct sup_page *) malloc(sizeof(struct sup_page));
-	p->vaddr = upage;
-
-	p->f = file;
-	p->offset = offset;
-	p->length = file_length;
-
-	p->isExec = false;
-	p->swap = false;
-	p->ehdr = NULL;
-
-	/* insert into sup page table */
-	ASSERT(hash_replace (&thread_current()->sup_page_table, &p->elem) == NULL);
-
-	/* create page table dummy pointing to first kernel page.
-	 * ASSUMPTION: first kernel page is always zeroed */
-	ASSERT(install_lazy_user_page(p->vaddr, PHYS_BASE, true));
-
-	/* get page table entry */
-	uint32_t *pte = get_pte(thread_current()->pagedir, p->vaddr);
-
-	/* set present to false */
-	*pte = *pte & ~PTE_P;
-
-	/* set vaddress to upage */
-	*pte = (*pte & PTE_FLAGS) | ((uint32_t)upage & PTE_ADDR);
+  struct page p;
+  struct hash_elem *e;
+  //make sure the address is aligned
+  p.vaddr = (void *) ((unsigned int)address - (unsigned int)address % PGSIZE);
+  e = hash_find (&t->sup_page_table, &p.hash_elem);
+  return e != NULL ? hash_entry (e, struct page, hash_elem) : NULL;
 }
 
+
+//this function will swap a page from memory to frame
+//this function just gets called from the running thread
+void page_swap_out (void * vaddr) {
+
+        struct page *cur;
+        //get the page
+        cur = page_lookup_swap(vaddr, thread_current());
+        //look what kind of page it is
+        switch (cur->type) {
+
+        case (PAGE_FRAME):      //trigger a kernel panic this should not happen
+                PANIC ("Userpage should be in frame table\n");
+        case (PAGE_SWAP):       /* page is in swap so we have to pull it out and save it in a frame */
+                {
+                //get a free frame from the frame table         
+                void * frame = (void *)get_frame();
+                lock_acquire(&user_frames_lock);
+                //swap the frame table and swap slot
+                get_swap ((size_t)cur->paddr, frame);
+                //set the variables in the page table
+                cur->paddr = frame;
+                cur->type=PAGE_FRAME;
+                //reset the page table to the new physical address
+                bool check = pagedir_set_page (thread_current()->pagedir, cur->vaddr, cur->paddr, cur->writable);
+                ASSERT(check);
+                lock_release(&user_frames_lock);
+                }
+                break;
+                case (PAGE_MMAP): //load a page from a mmap file to the frame
+                        {
+                        void * kpage = (void *)get_frame();
+                        lock_acquire(&user_frames_lock);
+                
+                        off_t offset = cur->offset;
+                        off_t readbytes = cur->readbytes;
+
+                        struct file * file = find_file(cur->mapid)->file;
+
+                        if (file == NULL) printf("problem\n");
+
+                        //set the correct offset that is hidden in paddr
+                        file_seek (file, offset);
+
+                        int val = 0;
+                        if (readbytes > 0) val = file_read (file, kpage,readbytes);
+               
+                        //put in the newly allocated
+                        if (pagedir_set_page (thread_current()->pagedir, cur->vaddr, kpage, cur->writable) == false) printf("couldnt put in page\n");
+                        //set type to frame since it is loaded now      
+                        cur->paddr = (void *)kpage;                     
+                        cur->type = PAGE_FRAME;
+                        //reset the dirty bit of the kpage since it wasn't really changed anything in the page
+                        pagedir_set_dirty (thread_current()->pagedir, kpage, false);
+
+                        lock_release(&user_frames_lock);
+                        }
+                        break;
+                default:
+                break;
+
+        }
+        //lock_release(&thread_current()->page_lock);
+}
+
+<<<<<<< .mine
+//this function will swap a page from the frame table to the swap 
+void page_swap_in (void * vaddr, struct thread * t) {
+=======
 void delete_lazy_mmap_page(void* upage)
 {
 	struct sup_page * page = page_lookup ((const void*) upage);
@@ -293,39 +362,87 @@ load_mmap_data(struct sup_page* p)
 	struct file* file = p->f;
 	uint32_t offset = p->offset;
 	uint32_t length = p->length;
+>>>>>>> .r139
 
-	void *upage = p->vaddr;
+        struct page *cur;
 
-	lock_acquire(&user_frames_lock);
+        cur = page_lookup_swap(vaddr, t);
 
-	/* allocate user page */
-	void* kpage = get_user_page(PAL_ZERO);
+        switch (cur->type) {
 
-	ASSERT(kpage != NULL);
+                case (PAGE_FRAME):
+                        {
+                        if(cur->mapid < 0) {
+                                cur->paddr = (size_t *)add_swap(cur->paddr);
+                                cur->type=PAGE_SWAP;
+                        } else {
+                                //we have a memory mapped file
+                                off_t offset = cur->offset;
+                                off_t writebytes = cur->readbytes;
 
-	/* calculate size */
-	off_t size = PGSIZE;
-	if(length - offset < PGSIZE)
-	{
-		size = length - offset;
-	}
+                                if (pagedir_is_dirty (t->pagedir, cur->vaddr) || pagedir_is_dirty (t->pagedir, cur->paddr)) {
+                                        //the file is a zero page from exec 
+                                        if(cur->mapid == 2) {
+                                                cur->paddr = (size_t *)add_swap(cur->paddr);
+                                                cur->type=PAGE_SWAP;
+                                                break;
+                                        }
 
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+                                        struct file * file = find_file(cur->mapid)->file;
+                
+                                        if (file == NULL) printf("problem\n");
 
-	/* copy contents */
-	file_seek(file, (off_t) offset);
-	off_t len = file_read(file, kpage, size);
+                                        //set the correct offset that is hidden in paddr
+                                        file_seek (file, offset);
 
-	/* acquire file system lock */
-	lock_release(&filesystem_lock);
+                                        if (file_write (file, cur->paddr, writebytes) != writebytes) {
+                                                PANIC("Error writing to file");
+                                        }
+                                }       
+                                cur->type = PAGE_MMAP;
+                        }
+                        }       
+                        break;
+                case (PAGE_SWAP):       /* shouldn't happen */
+                        PANIC ("Page is already in swap\n");
+                default:
+                        break;
+                }
+                pagedir_clear_page (t->pagedir, cur->vaddr);
+}
 
+<<<<<<< .mine
+//finds the virtual memory address for a physical one
+//needed for page eviction in frame.c
+void * get_vaddr_page (void * kpage, struct thread * t) {
+=======
 	if(DEBUG && len != size){
 		printf("read: %u, size: %u\n", (uint32_t) len, (uint32_t) size);
 	}
 	ASSERT(install_user_page(upage, kpage, true));
+>>>>>>> .r139
 
-	lock_release(&user_frames_lock);
+        //look through the frames in the table beginning at the end
+        struct hash_iterator i;
 
-	return true;
+        void * result = NULL;
+
+        lock_acquire(&t->page_lock);
+
+        hash_first (&i, t->page_table);
+        while (hash_next (&i)) {
+                struct page *p = hash_entry (hash_cur (&i), struct page, hash_elem);
+                if (p->type == PAGE_FRAME && p->paddr == kpage) {
+                        result = p->vaddr;
+                        break;
+                }
+        }
+        //make sure result is not NULL
+        ASSERT(result);
+
+        lock_release(&t->page_lock);
+
+        return result;
 }
+
+
