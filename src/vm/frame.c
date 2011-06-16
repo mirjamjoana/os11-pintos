@@ -1,9 +1,11 @@
 #include "vm/frame.h"
+#include "vm/page.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "threads/palloc.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
+#include "userprog/pagedir.h"
 #include <stdio.h>
 #include <string.h>
 #include <hash.h>
@@ -11,6 +13,7 @@
 /* static member functions */
 static struct frame * frame_lookup (const void *address);
 
+void * swap_frame (void);
 
 void
 user_frames_init()
@@ -33,6 +36,8 @@ alloc_user_frames(enum palloc_flags flags, size_t frame_cnt)
 
 	if(frames == NULL) {
 		/* TODO try to swap out pages for allocation */
+		if (SWAP) frames = swap_frame();
+
 	}
 
 	return frames;
@@ -141,3 +146,75 @@ frame_less (const struct hash_elem *a_, const struct hash_elem *b_,
 
   return a->id < b->id;
 }
+
+
+//this functions gets a new frame and returns the corresponding memory page
+uint8_t * get_frame (void ) {
+        //frame for the table
+        struct swap_frame * f = NULL;
+        //try to get a page
+        //lock the frame table
+        lock_acquire(&user_frames_lock);
+        uint8_t * kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+
+        //check if hash table is full
+        if (kpage == NULL) {
+                //now we have to evict a page
+                kpage = swap_frame();
+        }
+
+        //create a new frame otherwise
+        f = (struct swap_frame *) malloc (sizeof(struct swap_frame));
+
+        //in case there was a problem with getting a page
+        ASSERT(kpage);
+
+        //save the threads id and the physical address in the new frame struct
+        f->thread = thread_current();
+        f->addr = kpage;
+        f->lock = false;
+
+        hash_insert (&user_frames, &f->hash_elem);
+
+        //release the lock for the frame table
+        lock_release(&user_frames_lock);
+
+        return kpage;
+}
+
+
+//for the eviction policy
+void * swap_frame (void) {
+        //look through the frames in the table to find one to swap with the clock algorithm
+        struct hash_iterator i;
+
+        void * frame_swap = NULL;
+
+        while (frame_swap == NULL) {
+        hash_first (&i, &user_frames);
+        while (hash_next (&i)) {
+                struct swap_frame *f = hash_entry (hash_cur (&i), struct swap_frame, hash_elem);
+                void * vaddr = (void *)get_vaddr_page(f->addr,f->thread);
+                //page is dirty then swap it otherwise set it to 0 and go for the next one
+                //true case
+                if (f->lock == false) {
+                        if (pagedir_is_accessed (f->thread->pagedir, vaddr) ) {
+                                //set dirty bit to false
+                                pagedir_set_accessed (f->thread->pagedir, vaddr, false);
+                        } else {
+                                //page is dirty so we can swap it
+                                page_swap_in(vaddr,f->thread);
+                                unregister_frames(f->addr, 1);
+                                frame_swap = palloc_get_page (PAL_USER | PAL_ZERO); 
+                                break;
+                        }
+                }
+        }
+        }
+
+        ASSERT(frame_swap);
+        return frame_swap;
+}
+
+
+
