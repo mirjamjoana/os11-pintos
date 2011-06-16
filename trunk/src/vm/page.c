@@ -90,13 +90,11 @@ create_lazy_user_page (struct file* file, struct Elf32_Ehdr *ehdr)
 
 
 bool
-is_legal_stack_growth (void *fault_addr)
+is_legal_stack_growth (void *fault_addr, void* esp)
 {	
-	void *current_esp =  (void*) thread_current()->stack;
+	if(DEBUG) printf("Check for legal stack growth. current ESP: %x - access esp: %x", (uint32_t)fault_addr, (uint32_t)esp);
 
-	if(DEBUG) printf("Check for legal stack growth. current ESP: %x - access esp: %x", (uint32_t)fault_addr, (uint32_t)current_esp);
-
-	if(current_esp - fault_addr <= STACK_GROW_LIMIT)
+	if(esp - fault_addr <= STACK_GROW_LIMIT)
 		return true;
 
 	return false;

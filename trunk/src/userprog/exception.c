@@ -162,7 +162,7 @@ page_fault (struct intr_frame *f)
 			  return;
 	  }
 
-	  if (is_legal_stack_growth(fault_addr))
+	  if (is_legal_stack_growth(fault_addr, f->esp))
 	  {
 		  /*grow stack */
 		  grow_stack(fault_addr);
