@@ -1057,6 +1057,7 @@ munmap (mapid_t map_id)
 
 		} else {
 			file_seek(file, file_tell(file) + size);
+			delete_lazy_mmap_page(current_uaddr);
 		}
 
 		/* decrement left length */
