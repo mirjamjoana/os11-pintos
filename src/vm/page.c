@@ -280,7 +280,7 @@ load_mmap_data(struct sup_page* p)
 	off_t size = PGSIZE;
 	if(length - offset < PGSIZE)
 	{
-		size = PGSIZE - (length - offset);
+		size = length - offset;
 	}
 
 	/* acquire file system lock */
