@@ -19,6 +19,7 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/pte.h"
 #include "vm/page.h"
 #include "vm/frame.h"
 
@@ -688,6 +689,7 @@ load_user_code_and_data(struct file* file, struct Elf32_Ehdr *ehdr)
 
 	success = true;
 
+
 done:
 	return success;
 }
@@ -768,6 +770,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (ofs % PGSIZE == 0);
 
   file_seek (file, ofs);
+  bool first = true;
+
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -792,12 +796,35 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-      /* Add the page to the process's address space. */
-      if (!install_user_page (upage, kpage, writable))
-        {
-    	  free_user_page (kpage);
-          return false; 
-        }
+      /* if this is the first code / data page
+       * we have to update the page table entry
+       * which we already created */
+      if(first)
+      {
+    	  /* fetch entry */
+    	  uint32_t *pte = get_pte(thread_current()->pagedir, (const void*) upage);
+
+    	  /* update kernel address and set present bit to 1 */
+
+    	  /* set address */
+    	  *pte = *pte & PTE_FLAGS;
+    	  *pte = *pte | ((uint32_t)kpage & PTE_ADDR);
+
+    	  /* set present bit */
+    	  *pte = *pte | PTE_P;
+
+    	  /* register frame */
+    	  register_frame(upage, kpage);
+      }
+      else
+      {
+		  /* Add the page to the process's address space. */
+		  if (!install_user_page (upage, kpage, writable))
+			{
+			  free_user_page (kpage);
+			  return false;
+			}
+      }
 
       /* release frame lock */
       lock_release(&user_frames_lock);
@@ -806,6 +833,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
+
+      first = false;
     }
   return true;
 }
