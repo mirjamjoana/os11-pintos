@@ -973,7 +973,7 @@ mmap (int fd, void *addr)
 	        /* reopen file */
 	        struct file *file = file_reopen(f);
 	        
-		    size_t size = filesize(fd);
+		    size_t size = (unsigned) file_length(file);
 		    int page_count = 0;
 		    
 		    mapid_t mapid = MAP_FAILED;
