@@ -121,15 +121,25 @@ Those can be found in Part A.
 >> B2: When a frame is required but none is free, some frame must be
 >> evicted.  Describe your code for choosing a frame to evict.
 
-We did not find the time to implement eviction.
+We did not find the time to implement eviction. We would have liked to
+implement some form of second chance algorithm.
 
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
 
+We set the page table entry to not present and wait for the page fault
+if the page is requested again.
+
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
 >> the page that faulted.
+
+We lookup the stack pointer of the user process. It the accessed address
+is no more than 32 byte under the stack pointer, we believe its a normal
+push / pusha and create a new page if necessary. On the other hand, if an
+accessed address is between PHYS_BASE and the stack pointer, we also create
+the corresponding page.
 
 ---- SYNCHRONIZATION ----
 
@@ -138,15 +148,20 @@ We did not find the time to implement eviction.
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
 
-We tried to use a minimal amount of locks to keep parallelism. For that, we
-only keep one lock for frame and page table.
-So data structures are only accessed by one process at a time and we were focusing
-on the right order of acquiring the locks to prevent deadlocks.
+We tried to use a minimal amount of locks to keep parallelism. For that, 
+we only keep one lock for frame and page table.
+So data structures are only accessed by one process at a time and we were 
+focusing on the right order of acquiring the locks to prevent deadlocks.
 
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
+
+As we did not implement it, we can simply tell our plan. Via the frame 
+and page lock no race condition can occur. Modifying between a page fault 
+of process x is also not possible as we first set the present bit to false
+before we start evicting the frame. 
 
 >> B7: Suppose a page fault in process P causes a page to be read from
 >> the file system or swap.  How do you ensure that a second process Q
@@ -161,7 +176,11 @@ This is ensured by keeping the frame lock while accessing critical sections.
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
 
-This is also ensured by keeping the frame lock.
+The page fault handler recognizes if the page fault is in the user space
+wheter the process is in kernel or in user mode. In that way, we can
+distinguish a irregular page fault from one that was triggered by a
+missing page. The page is then simply loaded into the user space as
+usual.
 
 ---- RATIONALE ----
 
@@ -171,6 +190,11 @@ This is also ensured by keeping the frame lock.
 >> possibility for deadlock but allows for high parallelism.  Explain
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
+
+We tried to use as little locks as possible to not run into deadlock
+situations. On the other side we implemented so much that we do not 
+run into performance or usability issues. We think we made a good
+choice in between both.
 
 			 MEMORY MAPPED FILES
 			 ===================
