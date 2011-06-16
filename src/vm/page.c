@@ -92,24 +92,24 @@ create_lazy_user_page (struct file* file, struct Elf32_Ehdr *ehdr)
 bool
 is_legal_stack_growth (void *fault_addr, void* esp)
 {	
-	if(DEBUG) printf("Check for legal stack growth. current ESP: %x - access at: %x", (uint32_t)fault_addr, (uint32_t)esp);
+	if(DEBUG) printf("Check for legal stack growth. esp: %x - access at: %x\n", (uint32_t) esp, (uint32_t) fault_addr);
+	
+	uint32_t fault_ptr = (uint32_t) fault_addr;
+	uint32_t stack_ptr = (uint32_t) esp;
 
 	/* fault address under esp */
-	if(fault_addr <= esp)
+	if(fault_ptr <= stack_ptr)
 	{
-		/* max 32 byte */
-		if(esp - fault_addr <= STACK_GROW_LIMIT)
-			return true;
+		if(DEBUG) printf("fault address under esp\n");
+		/* max 32 byte */		
+		return ((stack_ptr - fault_ptr) <= STACK_GROW_LIMIT);
 	}
 	/* fault address above esp */
 	else
 	{
 		/* somewhere between first page and esp */
-		if(fault_addr < PHYS_BASE - PGSIZE)
-			return true;
+		return fault_ptr < (uint32_t)(PHYS_BASE - PGSIZE);
 	}
-
-	return false;
 }
 
 

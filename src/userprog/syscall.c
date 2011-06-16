@@ -838,9 +838,12 @@ syscall_check_pointer (const void *uaddr, bool write)
 	/* check if address exists, exits if not */
 	void *kaddr = syscall_get_kernel_address(uaddr);
 
+	if(DEBUG) printf("Checking pointer .. ");
+
 	/* page table entry found */
 	if(kaddr != NULL)
 	{
+		if(DEBUG) printf("found.\n ");
 		/* before we write check if write is enabled */
 		if(write)
 		{
@@ -854,6 +857,7 @@ syscall_check_pointer (const void *uaddr, bool write)
 			return;
 
 	} else {
+		if(DEBUG) printf("not found.\n");
 		/* check if syscall leads to uninitialized page */
 		if (is_legal_stack_growth((void*) uaddr, *thread_current()->esp))
 		{
