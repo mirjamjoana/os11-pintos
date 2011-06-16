@@ -156,6 +156,7 @@ struct mapping_elem
     void *addr;                         /* virtual address of mapping */
     int page_count;                  /* number of mapped pages */
     struct file *file;  /* reopened file for mapping purposes */
+    uint32_t length;	/* file length */
   };
 
 /* If false (default), use round-robin scheduler.
