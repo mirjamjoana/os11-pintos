@@ -183,6 +183,8 @@ grow_stack (void *fault_addr)
 	/* checks whether there is enough space left (less than 8MB occupied) */
 	if ((PHYS_BASE - fault_addr) < MAX_USER_STACK_SIZE)
 	{
+		lock_acquire(&user_frames_lock);
+
 		uint8_t *kpage;
 		kpage = get_user_page (PAL_ZERO);
 
@@ -196,6 +198,8 @@ grow_stack (void *fault_addr)
 			thread_exit();
 		}
 */
+		lock_release(&user_frames_lock);
+
 	}
 }
 
