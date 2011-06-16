@@ -77,6 +77,8 @@ page.c is called, which takes the virtual address and searches for it in the sup
 page table since this has the hash key in it.
 It returns the page which contains the physical address if any. Otherwise it returns NULL.
 
+
+
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
@@ -205,6 +207,11 @@ struct mapping_elem
 >> memory subsystem.  Explain how the page fault and eviction
 >> processes differ between swap pages and other pages.
 
+MMF get created through a call of mmap, where we install the mapping of the file and
+lazily allocate a corresponding number of pages. A new element in the mappings list
+is created, such that we can access the file even if it is closed by the user.
+We do not differ in case of page fault between memory mapped and other pages.
+
 >> C3: Explain how you determine whether a new file mapping overlaps
 >> any existing segment.
 
@@ -220,6 +227,8 @@ we want to allocate. It returns NULL iff this page is not mapped yet.
 >> that much of their implementation can be shared.  Explain why your
 >> implementation either does or does not share much of the code for
 >> the two situations.
+
+We do not differ between those two situations.
 
 			   SURVEY QUESTIONS
 			   ================
