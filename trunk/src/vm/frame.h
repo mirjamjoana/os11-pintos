@@ -19,6 +19,15 @@ struct frame
 
     /* TODO insert eviction data */
   };
+  
+struct swap_frame {
+        //pointer to the user memory page in the frame
+        uint8_t *addr;
+        struct hash_elem hash_elem;
+        struct thread * thread;
+        bool lock;
+};
+
 
 void user_frames_init(void);
 
@@ -29,6 +38,10 @@ void register_frame (void *upage, void *kpage);
 void unregister_frames (void *kpage, size_t page_cnt);
 
 void destroy_user_frames(void);
+
+uint8_t * get_frame (void);
+void frame_remove(void *);
+
 
 /* hash functions */
 unsigned frame_hash (const struct hash_elem *f_, void *aux);
