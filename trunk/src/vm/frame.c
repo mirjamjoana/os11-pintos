@@ -82,6 +82,8 @@ unregister_frames (void *kpage, size_t page_cnt)
 void
 destroy_user_frames()
 {
+	if(DEBUG) printf("Destroying user frames for process %i\n", thread_current()->tid);
+
 	struct hash_iterator i;
 	uint32_t *pagedir = thread_current()->pagedir;
 
@@ -90,11 +92,13 @@ start:
 
 	while (hash_next (&i))
 	  {
-		struct frame *f = hash_entry (hash_cur (&i), struct frame, hash_elem);
-		if(f->pagedir == pagedir)
-		{
-			/* delete frame from hash */
-			hash_delete(&user_frames, &f->hash_elem);
+	    struct frame *f = hash_entry (hash_cur (&i), struct frame, hash_elem);    
+	  
+	    if(f->pagedir == pagedir)
+	    {
+		    if(DEBUG) printf("Deleting hash entry id: %i, uaddr: %x, pagedir: %x\n", f->id, (unsigned int) f->upage, (unsigned int) f->pagedir);
+	    	/* delete frame from hash */
+	    	hash_delete(&user_frames, &f->hash_elem);
 
 			/* release allocated space */
 			free(f);
