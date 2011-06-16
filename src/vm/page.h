@@ -52,7 +52,7 @@ void create_lazy_user_page (struct file *file, struct Elf32_Ehdr *ehdr);
 //void load_lazy_user_page();
 
 /* stack grow methods */
-bool is_legal_stack_growth (void *fault_addr);
+bool is_legal_stack_growth (void *fault_addr, void* esp);
 void grow_stack (void *fault_addr);
 
 /* page directory and sup page table management */
