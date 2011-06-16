@@ -26,8 +26,7 @@ struct sup_page
 {
 	struct hash_elem elem; 		/* the hash element */
 
-	void* vaddr;				/* kernel address if swap, id if disk */
-
+	void* vaddr;				/* user memory address */
 	bool swap;					/* 1 => swap, 0 => disk */
 
 	bool isExec;				/* 1 => exec file of the current process  */
@@ -49,7 +48,7 @@ void destroy_user_pages(void);
 
 /* lazy allocation */
 void create_lazy_user_page (struct file *file, struct Elf32_Ehdr *ehdr);
-//void load_lazy_user_page();
+void create_lazy_mmap_page (struct file* file, uint32_t file_length, uint32_t offset, void* upage);
 
 /* stack grow methods */
 bool is_legal_stack_growth (void *fault_addr, void* esp);
@@ -64,5 +63,6 @@ bool sup_page_less (const struct hash_elem *a_, const struct hash_elem *b_, void
 
 /* page fault handling */
 bool find_and_load_page(void* vaddr);
+bool load_mmap_data(struct sup_page* p);
 
 #endif

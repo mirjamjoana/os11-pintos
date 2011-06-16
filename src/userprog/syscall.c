@@ -46,6 +46,7 @@ static void syscall_set_return_value (struct intr_frame *f, int ret_value);
 static void* syscall_get_kernel_address (const void *uaddr);
 static struct file* syscall_get_file(int file_descriptor);
 static void syscall_check_pointer(const void * ptr, bool write);
+static struct mapping_elem* get_mmap_file(mapid_t id);
 
 void halt (void);
 void exit (int status);
@@ -408,8 +409,6 @@ handle_mmap(struct intr_frame *f UNUSED)
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	void *addr = (void*) syscall_get_argument(f, 1); /* target mapping pointer */
-
-    syscall_check_pointer(addr, true);	/* check the address */
 
 	/* map file fd to addr */
 	mapid_t mapid = mmap(fd, addr);
@@ -949,7 +948,7 @@ mapid_t
 mmap (int fd, void *addr) 
 {
 	/* fails if file has a length of zero bytes */
-	if (filesize(fd) == 0) {
+	if (filesize(fd) <= STDOUT_FILENO) {
 		return MAP_FAILED;
 	}
 	/* fails if addr is zero */
@@ -960,86 +959,53 @@ mmap (int fd, void *addr)
 	else if (pg_ofs(addr) != 0) {
 	    return MAP_FAILED;
 	}
-	switch(fd) 
-	{
-		/* console input and output are not mappable */
-		case STDOUT_FILENO: return MAP_FAILED; break;
-		case STDIN_FILENO: return MAP_FAILED; break;
-		default: 
-		{
-		    /* get file */
-	        struct file *f = syscall_get_file(fd);
-	        
-	        /* reopen file */
-	        struct file *file = file_reopen(f);
-	        
-		    size_t size = (unsigned) file_length(file);
-		    int page_count = 0;
-		    
-		    mapid_t mapid = MAP_FAILED;
 
-            void *page_start; 
-            
-            struct mapping_elem *map = (struct mapping_elem *) malloc(sizeof(struct mapping_elem));
-            
-            /* get threads file descriptors */
-	        struct list* file_descriptors = &(thread_current()->file_descriptors);
+	/* get file of file descriptor fd */
+	struct file *f = syscall_get_file(fd);
 
-	        /* loop variables */
-	        struct list_elem *e;
-	        struct file_descriptor_elem *fde = (struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));
-            
-            /* search matching file descriptor */
-	        for (e = list_begin (file_descriptors); e != list_end (file_descriptors); e = list_next(e))
-	        {
-		        /* fetch list element */
-		        fde = list_entry (e, struct file_descriptor_elem, elem);
+	/* create backup file handle */
+	struct file *file = file_reopen(f);
 
-		        /* if the right file descriptor has been found map file */
-		        if (fde->file_descriptor == fd)
-		        {
-			        map->mapid = fde->file_descriptor;
-			        map->page_count = page_count;
-			        map->file = file;
-			        
-			        struct list* mappings = &(thread_current()->mappings);
-	               		                
-			        /* insert new map element into list of mappings */
-		            list_push_front(mappings, &map->elem);
-		            
-		            break;
-		        }
-	        }
-            
-		    /* computes the number of pages that are necessary */
-		    if (size % PGSIZE != 0) {
-			    page_count = ((size / PGSIZE) + 1);
-			}
-			else {
-			    page_count = (size / PGSIZE);
-			}
-			
-			int i;
-			/* check whether there is any overlapping */
-			for (i = 0; i < page_count; i++) {
-			    if (pagedir_get_page (thread_current()->pagedir, addr + (i * PGSIZE)) != NULL)
-			        return MAP_FAILED;
-			 }
-			 
-			/* allocate pages */
-			/* TODO richtige methode (+ lazy load) verwenden und file direkt übergeben */
-			/* TODO write (reopened) file to pages */	 
-		    page_start = (void*) get_multiple_user_pages(PAL_ZERO, page_count);
-			
-			/* set page address */
-	        map->addr = page_start;              
-	        
-	        /* if everything worked, set mapid */
-	        mapid = map->mapid;			
-			
-			return mapid;	
-		}
+	/* file length */
+	size_t size = file_length(file);
+
+	/* computes the number of pages that are necessary */
+	unsigned int page_count;
+	if (size % PGSIZE != 0) {
+		page_count = ((size / PGSIZE) + 1);
 	}
+	else {
+		page_count = (size / PGSIZE);
+	}
+
+	/* check if the memory area requested is free */
+	unsigned int i;
+	for (i = 0; i < page_count; i++) {
+		if (pagedir_get_page (thread_current()->pagedir, addr + (i * PGSIZE)) != NULL)
+			return MAP_FAILED;
+	 }
+
+	/* create sup page table entries
+	 * for lazy allocation */
+	for (i = 0; i < page_count; i++) {
+		create_lazy_mmap_page (file,(uint32_t) size, i * PGSIZE, addr + i * PGSIZE);
+	}
+
+	/* create new mmap element */
+	struct mapping_elem *mmap_file = (struct mapping_elem *) malloc(sizeof(struct mapping_elem));
+
+	mmap_file->mapid = fd;
+	mmap_file->page_count = page_count;
+	mmap_file->file = file;
+	mmap_file->addr = addr;
+	mmap_file->length = size;
+
+	struct list* mmap_files = &(thread_current()->mappings);
+
+	/* insert new map element into list of mappings */
+	list_push_front(mmap_files, &mmap_file->elem);
+
+	return mmap_file->mapid;
 }
 
 
@@ -1047,63 +1013,83 @@ mmap (int fd, void *addr)
 returned by a previous call to mmap by the same process that has not yet been 
 unmapped.  */
 void 
-munmap (mapid_t mapping) 
+munmap (mapid_t map_id)
 {   
-    /* get threads file descriptors */
-    struct list* mappings = &(thread_current()->mappings);
-    
-    int page_count = 0;
-    void* addr;
-    struct file *file;
-    size_t size = 0;
-           
-    /* loop variables */
-    struct list_elem *e;
-    struct mapping_elem *map;
+	/* search mmap file with id map_id */
+	struct mapping_elem *mmap_file = get_mmap_file(map_id);
 
-    /* search matching file */
-    for (e = list_begin (mappings); e != list_end (mappings); e = list_next(e))
-    {
-	     /* fetch list element */
-	     map = list_entry (e, struct mapping_elem, elem);
+	/* if no mapping has been found */
+	if(mmap_file == NULL) {
+		thread_current()->exit_status = -1;
+		thread_exit();
+	}
 
-	     /* if the right file descriptor has been found fetch mapid, page_count, addr and file */
-	     if (map->mapid == mapping)
-	     {
-		     page_count = map->page_count;
-		     addr = map->addr;
-		     file = map->file;
-		     
-		     size = (unsigned) file_length(file);
-	     
-	         /* check whether this is a mapping id that was returned by a 
-	         previous call of mmap */	  
-	         if (mapping != MAP_FAILED) {
-	                      
-			    // write pages back to file, close reopened file
-			    int i;
-			    if (size % PGSIZE == 0) {
-			        for (i = 0; i <page_count; i++) {
-			            memcpy(file, addr + (i * PGSIZE), PGSIZE);
-			        }
-			    }
-			    else {
-			        for (i = 0; i <page_count - 1; i++) {
-			            memcpy(file, addr + (i * PGSIZE), PGSIZE);
-			        }
-			        /* copy rest of file */
-			        memcpy(file, addr + (PGSIZE - 1), size - (PGSIZE * page_count));
-			            
-			        /* close reopened file */
-			        file_close(file);
-			            			            
-			        /* remove mapping */
-			        list_remove(&(map->elem));
-		        }
-	         }	         
-	     }
-	     else {
-	        return;
-	     }
-     }
+	unsigned int page_count = (unsigned int) mmap_file->page_count;
+	void* uaddr = mmap_file->addr;
+	struct file *file = mmap_file->file;
+	size_t length = (size_t) mmap_file->length;
+
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
+	/* jump to file start */
+	file_seek(file, (off_t) 0);
+
+	/* write pages back to file */
+	size_t size, length_left = length;
+	unsigned i;
+	for (i = 0; i < page_count; i++)
+	{
+		size = PGSIZE;
+
+		if (length_left % PGSIZE != 0) {
+			size = length_left % PGSIZE;
+		}
+
+		/* write back */
+		file_write(file, uaddr + (i * PGSIZE), size);
+
+		length_left -= size;
+	}
+
+	ASSERT(length_left == 0);
+
+	/* close file */
+	file_close(file);
+
+	/* release file system lock */
+	lock_release(&filesystem_lock);
+
+	/* remove mapping */
+	list_remove(&(mmap_file->elem));
+
+	/* free resources */
+	free(mmap_file);
+}
+
+
+static struct mapping_elem*
+get_mmap_file(mapid_t id)
+{
+	/* get threads file descriptors */
+	struct list* mappings = &(thread_current()->mappings);
+
+	/* loop variables */
+	struct list_elem *e;
+	struct mapping_elem *mmap_file;
+
+	/* search matching file */
+	for (e = list_begin (mappings); e != list_end (mappings); e = list_next(e))
+	{
+		 /* fetch list element */
+		mmap_file = list_entry (e, struct mapping_elem, elem);
+
+		/* if the right file descriptor has been found fetch mapid, page_count, addr and file */
+		if (mmap_file->mapid == id)
+		{
+			return mmap_file;
+		}
+	}
+
+	return NULL;
 }

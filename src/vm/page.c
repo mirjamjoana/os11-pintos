@@ -181,11 +181,11 @@ find_and_load_page(void* vaddr)
 		else
 		{
 			/* load memory mapped page from file */
+			success = load_mmap_data(p);
 		}
 	}
 
 	if(DEBUG && !success) printf("did not find page");
-
 	return success;
 }
 
@@ -224,3 +224,75 @@ page_lookup (const void *address)
   return e != NULL ? hash_entry (e, struct sup_page, elem) : NULL;
 }
 
+void
+create_lazy_mmap_page (struct file* file, uint32_t file_length, uint32_t offset, void* upage)
+{
+	ASSERT(offset % PGSIZE == 0);
+	ASSERT(pg_ofs(upage) == 0);
+
+	/* create sup pte */
+	struct sup_page*  p = (struct sup_page *) malloc(sizeof(struct sup_page));
+	p->vaddr = upage;
+
+	p->f = file;
+	p->offset = offset;
+	p->length = file_length;
+
+	p->isExec = false;
+	p->swap = false;
+	p->ehdr = NULL;
+
+	/* insert into sup page table */
+	ASSERT(hash_replace (&thread_current()->sup_page_table, &p->elem) == NULL);
+
+	/* create page table dummy pointing to first kernel page.
+	 * ASSUMPTION: first kernel page is always zeroed */
+	ASSERT(install_lazy_user_page(p->vaddr, PHYS_BASE, true));
+
+	/* get page table entry */
+	uint32_t *pte = get_pte(thread_current()->pagedir, p->vaddr);
+
+	/* set present to false */
+	*pte = *pte & ~PTE_P;
+
+	/* set vaddress to upage */
+	*pte = (*pte & PTE_FLAGS) | ((uint32_t)upage & PTE_ADDR);
+}
+
+bool
+load_mmap_data(struct sup_page* p)
+{
+	/* fetch information */
+	struct file* file = p->f;
+	uint32_t offset = p->offset;
+	uint32_t length = p->length;
+
+	void *upage = p->vaddr;
+
+	/* allocate user page */
+	void* kpage = get_user_page(PAL_ZERO);
+
+	ASSERT(kpage != NULL);
+
+	/* calculate size */
+	off_t size = PGSIZE;
+	if(length - offset < PGSIZE)
+	{
+		size = PGSIZE - (length - offset);
+	}
+
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
+	/* copy contents */
+	file_seek(file, (off_t) offset);
+	off_t len = file_read(file, kpage, size);
+
+	/* acquire file system lock */
+	lock_release(&filesystem_lock);
+
+	ASSERT(len == size)
+	ASSERT(install_user_page(upage, kpage, true));
+
+	return true;
+}
