@@ -33,13 +33,32 @@ free_multiple_user_pages(void * pages, size_t page_cnt)
 {
 	lock_acquire(&user_frames_lock);
 
-	/* TODO check if pages are present */
-	/* TODO present ? delete MM frame : delete SWAP frame */
+	unsigned i;
+	uint32_t * pte;
+
+	for(i = 0; i < page_cnt; i++)
+	{
+		pte = get_pte(thread_current()->pagedir, (const void *) pages + i * PGSIZE);
+
+		/* if page is present */
+		if(*pte & PTE_P)
+		{
+
+		}
+
+	}
 
 	/* delete hash entry */
 	unregister_frames(pages, page_cnt);
 
+	/* free pages */
 	palloc_free_multiple(pages, page_cnt);
+
+	/* cleanup page dir */
+	for(i = 0; i < page_cnt; i++)
+	{
+		pagedir_clear_page(thread_current()->pagedir, pages);
+	}
 
 	lock_release(&user_frames_lock);
 }
