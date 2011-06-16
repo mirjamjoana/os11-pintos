@@ -1029,9 +1029,6 @@ munmap (mapid_t map_id)
 	struct file *file = mmap_file->file;
 	size_t length = (size_t) mmap_file->length;
 
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
-
 	/* jump to file start */
 	file_seek(file, (off_t) 0);
 
@@ -1056,9 +1053,6 @@ munmap (mapid_t map_id)
 
 	/* close file */
 	file_close(file);
-
-	/* release file system lock */
-	lock_release(&filesystem_lock);
 
 	/* remove mapping */
 	list_remove(&(mmap_file->elem));
