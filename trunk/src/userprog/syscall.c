@@ -963,8 +963,8 @@ mmap (int fd, void *addr)
 	switch(fd) 
 	{
 		/* console input and output are not mappable */
-		case STDOUT_FILENO: return -1; break;
-		case STDIN_FILENO: return -1; break;
+		case STDOUT_FILENO: return MAP_FAILED; break;
+		case STDIN_FILENO: return MAP_FAILED; break;
 		default: 
 		{
 		    /* get file */
@@ -979,6 +979,8 @@ mmap (int fd, void *addr)
 		    mapid_t mapid = MAP_FAILED;
 
             void *page_start; 
+            
+            struct file_descriptor_elem *copy;
             
             /* get threads file descriptors */
 	        struct list* file_descriptors = &(thread_current()->file_descriptors);
@@ -1000,12 +1002,13 @@ mmap (int fd, void *addr)
 			        fde->page_count = page_count;
 			        fde->reopened_file = file;
 			        
-			        mapid = fde->mapid;
-			        
 			        struct list* mappings = &(thread_current()->mappings);
-	               			        
+	               	
+	                /* copy element */
+	                memcpy(copy, fde, sizeof(fde));
+	                
 			        /* insert new mapped file desciptor into list of mappings */
-		            list_push_front(mappings, &fde->elem);
+		            list_push_front(mappings, &copy->elem);
 		            
 		            break;
 		        }
@@ -1028,15 +1031,15 @@ mmap (int fd, void *addr)
 			 
 			/* allocate pages */
 			/* TODO richtige methode (+ lazy load) verwenden und file direkt übergeben */
+			/* TODO write (reopened) file to pages */	 
 		    page_start = (void*) get_multiple_user_pages(PAL_ZERO, page_count);
 			
 			/* set page address */
-	        fde->addr = page_start;
-	                
-			/* TODO write (reopened) file to pages */	               
+	        fde->addr = page_start;              
 	        
-	        			
-			/* TODO */
+	        /* if everything worked, set mapid */
+	        mapid = fde->mapid;			
+			
 			return mapid;	
 		}
 	}
@@ -1094,7 +1097,7 @@ munmap (mapid_t mapping)
 		            /* if the right file descriptor has been found write pages back */
 		            if (mapped_file->mapid == mapping)
 		            {
-			            // TODO write pages back to file, close reopened file
+			            // write pages back to file, close reopened file
 			            int i;
 			            if (size % PGSIZE == 0) {
 			                for (i = 0; i <page_count; i++) {
