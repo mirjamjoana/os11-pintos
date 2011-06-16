@@ -85,19 +85,24 @@ destroy_user_frames()
 	struct hash_iterator i;
 	uint32_t *pagedir = thread_current()->pagedir;
 
+start:
 	hash_first (&i, &user_frames);
 
 	while (hash_next (&i))
 	  {
-	    struct frame *f = hash_entry (hash_cur (&i), struct frame, hash_elem);
-	    if(f->pagedir == pagedir)
-	    {
-	    	/* delete frame from hash */
-	    	hash_delete(&user_frames, &f->hash_elem);
+		struct frame *f = hash_entry (hash_cur (&i), struct frame, hash_elem);
+		if(f->pagedir == pagedir)
+		{
+			/* delete frame from hash */
+			hash_delete(&user_frames, &f->hash_elem);
 
-	    	/* release allocated space */
-	    	free(f);
-	    }
+			/* release allocated space */
+			free(f);
+
+			/* iterator invalidates after hash modification,
+			 * have to build iterator again */
+			goto start;
+		}
 	  }
 }
 
