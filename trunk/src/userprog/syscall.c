@@ -967,12 +967,49 @@ mmap (int fd, void *addr)
 		case STDIN_FILENO: return -1; break;
 		default: 
 		{
+		    /* get file */
+	        struct file *f = syscall_get_file(fd);
+	        
+	        /* reopen file */
+	        struct file *file = file_reopen(f);
+	        
 		    size_t size = filesize(fd);
 		    int page_count = 0;
 		    
 		    mapid_t mapid = MAP_FAILED;
 
             void *page_start; 
+            
+            /* get threads file descriptors */
+	        struct list* file_descriptors = &(thread_current()->file_descriptors);
+
+	        /* loop variables */
+	        struct list_elem *e;
+	        struct file_descriptor_elem *fde;
+            
+            /* search matching file descriptor */
+	        for (e = list_begin (file_descriptors); e != list_end (file_descriptors); e = list_next(e))
+	        {
+		        /* fetch list element */
+		        fde = list_entry (e, struct file_descriptor_elem, elem);
+
+		        /* if the right file descriptor has been found map file */
+		        if (fde->file_descriptor == fd)
+		        {
+			        fde->mapid = fde->file_descriptor;
+			        fde->page_count = page_count;
+			        fde->reopened_file = file;
+			        
+			        mapid = fde->mapid;
+			        
+			        struct list* mappings = &(thread_current()->mappings);
+	               			        
+			        /* insert new mapped file desciptor into list of mappings */
+		            list_push_front(mappings, &fde->elem);
+		            
+		            break;
+		        }
+	        }
             
 		    /* computes the number of pages that are necessary */
 		    if (size % PGSIZE != 0) {
@@ -992,37 +1029,13 @@ mmap (int fd, void *addr)
 			/* allocate pages */
 			/* TODO richtige methode (+ lazy load) verwenden und file direkt übergeben */
 		    page_start = (void*) get_multiple_user_pages(PAL_ZERO, page_count);
-				               
-	        /* get threads file descriptors */
-	        struct list* file_descriptors = &(thread_current()->file_descriptors);
-
-	        /* loop variables */
-	        struct list_elem *e;
-	        struct file_descriptor_elem *fde;
-
-	        /* search matching file */
-	        for (e = list_begin (file_descriptors); e != list_end (file_descriptors); e = list_next(e))
-	        {
-		        /* fetch list element */
-		        fde = list_entry (e, struct file_descriptor_elem, elem);
-
-		        /* if the right file descriptor has been found map file */
-		        if (fde->file_descriptor == fd)
-		        {
-			        fde->mapid = fde->file_descriptor;
-			        mapid = fde->mapid;
-			        fde->page_count = page_count;
-			        
-			        struct list* mappings = &(thread_current()->mappings);
-	                
-	                /* set page address */
-	                fde->addr = page_start;
-			        
-			        /* insert new mapped file desciptor into list of mappings */
-		            list_push_front(mappings, &fde->elem);
-		        }
-	        }
 			
+			/* set page address */
+	        fde->addr = page_start;
+	                
+			/* TODO write (reopened) file to pages */	               
+	        
+	        			
 			/* TODO */
 			return mapid;	
 		}
@@ -1038,9 +1051,12 @@ munmap (mapid_t mapping)
 {   
     /* get threads file descriptors */
     struct list* file_descriptors = &(thread_current()->file_descriptors);
+    
     mapid_t mapid = -1;
     int page_count = 0;
     void* addr;
+    struct file *file;
+    size_t size = 0;
            
     /* loop variables */
     struct list_elem *e;
@@ -1052,12 +1068,15 @@ munmap (mapid_t mapping)
 	     /* fetch list element */
 	     fde = list_entry (e, struct file_descriptor_elem, elem);
 
-	     /* if the right file descriptor has been found fetch mapid, page_count and addr */
+	     /* if the right file descriptor has been found fetch mapid, page_count, addr and file */
 	     if (fde->mapid == mapping)
 	     {
 		     mapid = fde->mapid;
 		     page_count = fde->page_count;
 		     addr = fde->addr;
+		     file = fde->reopened_file;
+		     
+		     size = filesize(fde->file_descriptor);
 	     
 	         if (mapid != MAP_FAILED) {
 	         
@@ -1075,12 +1094,24 @@ munmap (mapid_t mapping)
 		            /* if the right file descriptor has been found write pages back */
 		            if (mapped_file->mapid == mapping)
 		            {
-			            // TODO write pages back to file
+			            // TODO write pages back to file, close reopened file
 			            int i;
-			            for (i = 0; i <page_count; i++) {
-			                memcpy(fde->file, addr, PGSIZE);
+			            if (size % PGSIZE == 0) {
+			                for (i = 0; i <page_count; i++) {
+			                    memcpy(file, addr + (i * PGSIZE), PGSIZE);
+			                }
+			            }
+			            else {
+			                for (i = 0; i <page_count - 1; i++) {
+			                    memcpy(file, addr + (i * PGSIZE), PGSIZE);
+			                }
+			                /* copy rest of file */
+			                memcpy(file, addr + (PGSIZE - 1), size - (PGSIZE * page_count));
 			            }
 			            
+			            /* close reopened file */
+			            file_close(file);
+			            			            
 			            /* remove mapping */
 			            list_remove(&(mapped_file->elem));
 		            }
