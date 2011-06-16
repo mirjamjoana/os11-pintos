@@ -980,14 +980,14 @@ mmap (int fd, void *addr)
 
             void *page_start; 
             
-            struct file_descriptor_elem *copy;
+            struct mapping_elem *map = (struct mapping_elem *) malloc(sizeof(struct mapping_elem));
             
             /* get threads file descriptors */
 	        struct list* file_descriptors = &(thread_current()->file_descriptors);
 
 	        /* loop variables */
 	        struct list_elem *e;
-	        struct file_descriptor_elem *fde;
+	        struct file_descriptor_elem *fde = (struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));
             
             /* search matching file descriptor */
 	        for (e = list_begin (file_descriptors); e != list_end (file_descriptors); e = list_next(e))
@@ -998,17 +998,14 @@ mmap (int fd, void *addr)
 		        /* if the right file descriptor has been found map file */
 		        if (fde->file_descriptor == fd)
 		        {
-			        fde->mapid = fde->file_descriptor;
-			        fde->page_count = page_count;
-			        fde->reopened_file = file;
+			        map->mapid = fde->file_descriptor;
+			        map->page_count = page_count;
+			        map->file = file;
 			        
 			        struct list* mappings = &(thread_current()->mappings);
-	               	
-	                /* copy element */
-	                memcpy(copy, fde, sizeof(fde));
-	                
-			        /* insert new mapped file desciptor into list of mappings */
-		            list_push_front(mappings, &copy->elem);
+	               		                
+			        /* insert new map element into list of mappings */
+		            list_push_front(mappings, &map->elem);
 		            
 		            break;
 		        }
@@ -1035,10 +1032,10 @@ mmap (int fd, void *addr)
 		    page_start = (void*) get_multiple_user_pages(PAL_ZERO, page_count);
 			
 			/* set page address */
-	        fde->addr = page_start;              
+	        map->addr = page_start;              
 	        
 	        /* if everything worked, set mapid */
-	        mapid = fde->mapid;			
+	        mapid = map->mapid;			
 			
 			return mapid;	
 		}
@@ -1053,9 +1050,8 @@ void
 munmap (mapid_t mapping) 
 {   
     /* get threads file descriptors */
-    struct list* file_descriptors = &(thread_current()->file_descriptors);
+    struct list* mappings = &(thread_current()->mappings);
     
-    mapid_t mapid = -1;
     int page_count = 0;
     void* addr;
     struct file *file;
@@ -1063,63 +1059,48 @@ munmap (mapid_t mapping)
            
     /* loop variables */
     struct list_elem *e;
-    struct file_descriptor_elem *fde;
+    struct mapping_elem *map;
 
     /* search matching file */
-    for (e = list_begin (file_descriptors); e != list_end (file_descriptors); e = list_next(e))
+    for (e = list_begin (mappings); e != list_end (mappings); e = list_next(e))
     {
 	     /* fetch list element */
-	     fde = list_entry (e, struct file_descriptor_elem, elem);
+	     map = list_entry (e, struct mapping_elem, elem);
 
 	     /* if the right file descriptor has been found fetch mapid, page_count, addr and file */
-	     if (fde->mapid == mapping)
+	     if (map->mapid == mapping)
 	     {
-		     mapid = fde->mapid;
-		     page_count = fde->page_count;
-		     addr = fde->addr;
-		     file = fde->reopened_file;
+		     page_count = map->page_count;
+		     addr = map->addr;
+		     file = map->file;
 		     
-		     size = filesize(fde->file_descriptor);
+		     size = (unsigned) file_length(file);
 	     
-	         if (mapid != MAP_FAILED) {
-	         
-	            /* check whether this is a mapping id that was returned by a 
-	            previous call of mmap */
-	            struct list* mappings = &(thread_current()->mappings);
-	            struct file_descriptor_elem *mapped_file;
-	            
-	            /* search matching file */
-	            for (e = list_begin (mappings); e != list_end (mappings); e = list_next(e))
-	            {
-		            /* fetch list element */
-		            mapped_file = list_entry (e, struct file_descriptor_elem, elem);
-
-		            /* if the right file descriptor has been found write pages back */
-		            if (mapped_file->mapid == mapping)
-		            {
-			            // write pages back to file, close reopened file
-			            int i;
-			            if (size % PGSIZE == 0) {
-			                for (i = 0; i <page_count; i++) {
-			                    memcpy(file, addr + (i * PGSIZE), PGSIZE);
-			                }
-			            }
-			            else {
-			                for (i = 0; i <page_count - 1; i++) {
-			                    memcpy(file, addr + (i * PGSIZE), PGSIZE);
-			                }
-			                /* copy rest of file */
-			                memcpy(file, addr + (PGSIZE - 1), size - (PGSIZE * page_count));
-			            }
+	         /* check whether this is a mapping id that was returned by a 
+	         previous call of mmap */	  
+	         if (mapping != MAP_FAILED) {
+	                      
+			    // write pages back to file, close reopened file
+			    int i;
+			    if (size % PGSIZE == 0) {
+			        for (i = 0; i <page_count; i++) {
+			            memcpy(file, addr + (i * PGSIZE), PGSIZE);
+			        }
+			    }
+			    else {
+			        for (i = 0; i <page_count - 1; i++) {
+			            memcpy(file, addr + (i * PGSIZE), PGSIZE);
+			        }
+			        /* copy rest of file */
+			        memcpy(file, addr + (PGSIZE - 1), size - (PGSIZE * page_count));
 			            
-			            /* close reopened file */
-			            file_close(file);
+			        /* close reopened file */
+			        file_close(file);
 			            			            
-			            /* remove mapping */
-			            list_remove(&(mapped_file->elem));
-		            }
-	            }
-	         }
+			        /* remove mapping */
+			        list_remove(&(map->elem));
+		        }
+	         }	         
 	     }
 	     else {
 	        return;

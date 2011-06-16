@@ -146,11 +146,16 @@ struct file_descriptor_elem
   {
     struct list_elem elem;				/* list dummy */
     int file_descriptor;				/* file handler number */
-    mapid_t mapid;                        /* mapping identifier */
     struct file *file; 					/* file link */
+  };
+  
+struct mapping_elem
+  {
+    struct list_elem elem;				/* list dummy */
+    mapid_t mapid;                        /* mapping identifier */
     void *addr;                         /* virtual address of mapping */
     int page_count;                  /* number of mapped pages */
-    struct file *reopened_file;  /* reopened file for mapping purposes */
+    struct file *file;  /* reopened file for mapping purposes */
   };
 
 /* If false (default), use round-robin scheduler.

@@ -564,6 +564,9 @@ init_thread (struct thread *t, const char *name, int priority)
 
   /* initialize children list */
   list_init (&(t->children));
+  
+  /* initialize mapping list */
+  list_init(&(t->mappings));
 
   list_push_back (&all_list, &t->allelem);
 }
