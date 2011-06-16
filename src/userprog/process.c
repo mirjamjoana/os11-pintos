@@ -316,6 +316,9 @@ process_exit (void)
 		free(c);
 	}
 
+	/* cleanup user pages */
+	destroy_user_pages();
+
 	/* Destroy the current process's page directory and switch back
 	 to the kernel-only page directory. */
 	pd = cur->pagedir;
@@ -332,9 +335,6 @@ process_exit (void)
 		pagedir_activate (NULL);
 		pagedir_destroy (pd);
 	}
-
-	/* cleanup user pages */
-	destroy_user_pages();
 
 	/* try to get child element of current thread */
 	struct child *list_element = process_get_child(cur->parent, cur->tid);
