@@ -83,7 +83,7 @@ void
 destroy_user_frames()
 {
 	struct hash_iterator i;
-	uint32_t * pagedir = (uint32_t) thread_current()->pagedir;
+	uint32_t *pagedir = thread_current()->pagedir;
 
 	hash_first (&i, &user_frames);
 
