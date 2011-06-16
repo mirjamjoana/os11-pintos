@@ -269,6 +269,8 @@ load_mmap_data(struct sup_page* p)
 
 	void *upage = p->vaddr;
 
+	lock_acquire(&user_frames_lock);
+
 	/* allocate user page */
 	void* kpage = get_user_page(PAL_ZERO);
 
@@ -293,6 +295,8 @@ load_mmap_data(struct sup_page* p)
 
 	ASSERT(len == size)
 	ASSERT(install_user_page(upage, kpage, true));
+
+	lock_release(&user_frames_lock);
 
 	return true;
 }
