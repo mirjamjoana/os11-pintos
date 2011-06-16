@@ -7,6 +7,7 @@
 #include "userprog/process.h"
 
 #define STACK_GROW_LIMIT 8 /* stack grow max 32 bytes at once (8 x 32 bit)*/
+#define MAX_USER_STACK_SIZE 0x800000
 #define USER_CODE_START 0x08048000
 
 /*
@@ -51,8 +52,8 @@ void create_lazy_user_page (struct file *file, struct Elf32_Ehdr *ehdr);
 //void load_lazy_user_page();
 
 /* stack grow methods */
-bool is_legal_stack_growth (void **esp);
-void grow_stack (void **esp);
+bool is_legal_stack_growth (void *fault_addr);
+void grow_stack (void *fault_addr);
 
 /* page directory and sup page table management */
 bool install_user_page (void *upage, void *kpage, bool writable);

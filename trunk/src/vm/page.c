@@ -90,11 +90,13 @@ create_lazy_user_page (struct file* file, struct Elf32_Ehdr *ehdr)
 
 
 bool
-is_legal_stack_growth (void **esp)
+is_legal_stack_growth (void *fault_addr)
 {	
 	void *current_esp =  (void*) thread_current()->stack;
 
-	if(current_esp - *esp < STACK_GROW_LIMIT)
+	if(DEBUG) printf("Check for legal stack growth. current ESP: %x - access esp: %x", (uint32_t)fault_addr, (uint32_t)current_esp);
+
+	if(current_esp - fault_addr <= STACK_GROW_LIMIT)
 		return true;
 
 	return false;
@@ -176,26 +178,26 @@ find_and_load_page(void* vaddr)
 
 
 void
-grow_stack (void **esp)
+grow_stack (void *fault_addr)
 {
-	/* TODO check if new page is necessary */
-	if(false /* new_page_necessary() */)
-	{
-		/* checks whether there is enough space left (less than 8MB occupied) */
-		if ((PHYS_BASE - *esp) < 0x800000)
-		{
-			uint8_t *kpage;
-			kpage = get_user_page (PAL_ZERO);
+	if(DEBUG) printf("growing stack for address %x\n", (unsigned int) fault_addr);
 
-			if (kpage != NULL)
-			{
-				bool success = install_user_page (((uint8_t *) *esp) - PGSIZE, kpage, true);
-				if (success)
-					*esp += PGSIZE; //FIXME
-				else
-					free_user_page (kpage);
-			}
+	/* checks whether there is enough space left (less than 8MB occupied) */
+	if ((PHYS_BASE - fault_addr) < MAX_USER_STACK_SIZE)
+	{
+		uint8_t *kpage;
+		kpage = get_user_page (PAL_ZERO);
+
+		ASSERT (kpage != NULL);
+
+		ASSERT (install_user_page (pg_round_down(fault_addr), kpage, true));
+/*
+		if (!success)
+		{
+			free_user_page (kpage);
+			thread_exit();
 		}
+*/
 	}
 }
 
