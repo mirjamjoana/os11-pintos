@@ -155,18 +155,17 @@ page_fault (struct intr_frame *f)
   {
 	  if(not_present)
 	  {
-		  /* TODO swap in page / load file */
 		  if(DEBUG) printf("got pagefault for address %x\n", (unsigned int) fault_addr);
 
 		  /* check the supplemental page table */
 		  if(find_and_load_page(fault_addr))
 			  return;
 	  }
-	  else if (is_legal_stack_growth(&f->esp))
-	  {
-		  /* TODO grow stack */
-		  if(DEBUG) printf("growing stack");
 
+	  if (is_legal_stack_growth(fault_addr))
+	  {
+		  /*grow stack */
+		  grow_stack(fault_addr);
 
 		  /* back to interrupt handler */
 		  return;
