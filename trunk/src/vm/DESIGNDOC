@@ -49,6 +49,24 @@ struct sup_page
 This is the supplemental page table, which supplements the page table with 
 additional data about each page.
 
+In frame.h:
+
+struct hash user_frames;
+struct lock user_frames_lock;
+
+struct frame
+  {
+    struct hash_elem hash_elem; /* Hash table element. */
+
+    uint32_t id;		/* Frame / Swap table id. */
+    uint32_t *pagedir;	/* User page directory. */
+    void* upage;		/* User Page. */
+  };
+  
+The hashtable, lock and the struct for arranging the frame structure and to avoid
+race conditions.
+
+
 ---- ALGORITHMS ----
 
 >> A2: In a few paragraphs, describe your code for locating the frame,
@@ -56,25 +74,34 @@ additional data about each page.
 
 When we need to lookup a frame for a virtual address, the function page_lookup in 
 page.c is called, which takes the virtual address and searches for it in the supplemental 
-page table since it is the hash key in the table.
-It returns the page which contains the physical address if any. If the type indicates 
-that there is no frame connected to it we have to load a frame.
-The physical address is the key in the frame hash table and I can call frame_lookup in frame.c to get the corresponding frame back.
-A check of the page type would be necessary since only PAGE_FRAME types have a frame.
+page table since this has the hash key in it.
+It returns the page which contains the physical address if any. Otherwise it returns NULL.
 
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
+
+The user programs are always using the virtual address to access pages.
+Since we did not implement sharing of pages, only one process has access to a 
+certain frame.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: When two user processes both need a new frame at the same time,
 >> how are races avoided?
 
+We are using a lock that locks all critical sections when requesting a frame or any
+access to the frame table.
+
 ---- RATIONALE ----
 
 >> A5: Why did you choose the data structure(s) that you did for
 >> representing virtual-to-physical mappings?
+
+We decided to use a hash table since it is easy to find a certain page with its virtual 
+address as identifier. Additionally, the structure allows for dynamic growing, which means
+that we do not waste memory here.
+
 
 		       PAGING TO AND FROM DISK
 		       =======================
@@ -85,10 +112,14 @@ A check of the page type would be necessary since only PAGE_FRAME types have a f
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Those can be found in Part A.
+
 ---- ALGORITHMS ----
 
 >> B2: When a frame is required but none is free, some frame must be
 >> evicted.  Describe your code for choosing a frame to evict.
+
+We did not find the time to implement eviction.
 
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
@@ -105,6 +136,11 @@ A check of the page type would be necessary since only PAGE_FRAME types have a f
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
 
+We tried to use a minimal amount of locks to keep parallelism. For that, we
+only keep one lock for frame and page table.
+So data structures are only accessed by one process at a time and we were focusing
+on the right order of acquiring the locks to prevent deadlocks.
+
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
@@ -115,11 +151,15 @@ A check of the page type would be necessary since only PAGE_FRAME types have a f
 >> cannot interfere by e.g. attempting to evict the frame while it is
 >> still being read in?
 
+This is ensured by keeping the frame lock while accessing critical sections.
+
 >> B8: Explain how you handle access to paged-out pages that occur
 >> during system calls.  Do you use page faults to bring in pages (as
 >> in user programs), or do you have a mechanism for "locking" frames
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
+
+This is also ensured by keeping the frame lock.
 
 ---- RATIONALE ----
 
