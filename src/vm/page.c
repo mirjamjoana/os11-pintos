@@ -165,13 +165,14 @@ sup_page_less (const struct hash_elem *a_, const struct hash_elem *b_,
 bool
 find_and_load_page(void* vaddr)
 {
+	bool success = false;
 	struct sup_page* p = page_lookup(vaddr);
 	if(p != NULL)
 	{
 		/* complete initialization */
 		if((unsigned int) p->vaddr == USER_CODE_START)
 		{
-			return load_user_code_and_data(p->f, p->ehdr);
+			success = load_user_code_and_data(p->f, p->ehdr);
 		}
 		else if(p->swap)
 		{
@@ -183,7 +184,9 @@ find_and_load_page(void* vaddr)
 		}
 	}
 
-	return false;
+	if(DEBUG && !success) printf("did not find page");
+
+	return success;
 }
 
 
