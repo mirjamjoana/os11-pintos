@@ -161,40 +161,31 @@ page_fault (struct intr_frame *f)
 			if(find_and_load_page(fault_addr))
 				return;
 		}
+	}
 
-		/* check if kernel page fault is form user space */
-		if (is_legal_stack_growth(fault_addr, thread_current()->esp))
-		{
-			/*grow stack */
-			grow_stack(fault_addr);
-
+	/* check if page fault is form user space */
+	if (is_legal_stack_growth(fault_addr, thread_current()->esp))
+	{
+		/*grow stack */
+		grow_stack(fault_addr);
 			/* back to interrupt handler */
-			return;
-		}
+		return;
+	}
 
+	if(user){
 		/* illegal page fault - exit thread */
 		thread_exit();
 	}
-	else
-	{
-		if(not_present)
-		{
-			/*grow stack */
-			grow_stack(fault_addr);
 
-			/* back to interrupt handler */
-			return;
-		}
 
-	  /* To implement virtual memory, delete the rest of the function
-		 body, and replace it with code that brings in the page to
-		 which fault_addr refers. */
-	  printf ("Page fault at %p: %s error %s page in %s context.\n",
-			  fault_addr,
-			  not_present ? "not present" : "rights violation",
-			  write ? "writing" : "reading",
-			  user ? "user" : "kernel");
-	  kill (f);
-	}
+	/* To implement virtual memory, delete the rest of the function
+	 body, and replace it with code that brings in the page to
+	 which fault_addr refers. */
+	printf ("Page fault at %p: %s error %s page in %s context.\n",
+		  fault_addr,
+		  not_present ? "not present" : "rights violation",
+		  write ? "writing" : "reading",
+		  user ? "user" : "kernel");
+	kill (f);
 }
 
