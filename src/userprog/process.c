@@ -28,6 +28,7 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 struct child* process_get_child(struct thread* parent, tid_t child_tid);
+static bool first = true;
 
 /* global variable */
 extern struct lock filesystem_lock;
@@ -770,7 +771,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (ofs % PGSIZE == 0);
 
   file_seek (file, ofs);
-  bool first = true;
 
   while (read_bytes > 0 || zero_bytes > 0) 
     {
@@ -794,17 +794,23 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           free_user_page (kpage);
           return false; 
         }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+      if(DEBUG && first) printf("writing first block @upage %x |  kpage %x\n", (uint32_t) upage, (uint32_t) kpage );
+	if(DEBUG) printf("loading segment\n");
+	memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
       /* if this is the first code / data page
        * we have to update the page table entry
        * which we already created */
       if(first)
       {
-    	  /* fetch entry */
-    	  uint32_t *pte = get_pte(thread_current()->pagedir, (const void*) upage);
 
-    	  /* update kernel address and set present bit to 1 */
+ 	  /* fetch entry */
+    	  uint32_t *pte = get_pte(thread_current()->pagedir, (const void*) upage);
+	
+	  if(DEBUG) printf("pte-old: %x\n", *pte);
+    	  
+	  /* update kernel address and set present bit to 1 */
 
     	  /* set address */
     	  *pte = *pte & PTE_FLAGS;
@@ -812,6 +818,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
     	  /* set present bit */
     	  *pte = *pte | PTE_P;
+	
+	  if(DEBUG) printf("pte-new: %x\n", *pte);
 
     	  /* register frame */
     	  register_frame(upage, kpage);
@@ -836,6 +844,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       first = false;
     }
+  if(DEBUG) printf("successfully loaded segment\n");
   return true;
 }
 
