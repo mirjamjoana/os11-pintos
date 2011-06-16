@@ -151,37 +151,50 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
 	/* check if user page fault can be handled */
-	if(user && not_present)
-	{
-		if(DEBUG) printf("got pagefault for address %x\n", (unsigned int) fault_addr);
-
-		/* check the supplemental page table */
-		if(find_and_load_page(fault_addr))
-			return;
-	}
-
-	/* check if kernel page fault is form user space */
-	if (is_legal_stack_growth(fault_addr, thread_current()->esp))
-	{
-		/*grow stack */
-		grow_stack(fault_addr);
-
-		/* back to interrupt handler */
-		return;
-	}
-
-	/* illegal page fault - exit thread */
 	if(user)
-		thread_exit();
+	{
+		if(not_present)
+		{
+			if(DEBUG) printf("got page fault for address %x\n", (unsigned int) fault_addr);
 
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+			/* check the supplemental page table */
+			if(find_and_load_page(fault_addr))
+				return;
+		}
+
+		/* check if kernel page fault is form user space */
+		if (is_legal_stack_growth(fault_addr, thread_current()->esp))
+		{
+			/*grow stack */
+			grow_stack(fault_addr);
+
+			/* back to interrupt handler */
+			return;
+		}
+
+		/* illegal page fault - exit thread */
+		thread_exit();
+	}
+	else
+	{
+		if(not_present)
+		{
+			/*grow stack */
+			grow_stack(fault_addr);
+
+			/* back to interrupt handler */
+			return;
+		}
+
+	  /* To implement virtual memory, delete the rest of the function
+		 body, and replace it with code that brings in the page to
+		 which fault_addr refers. */
+	  printf ("Page fault at %p: %s error %s page in %s context.\n",
+			  fault_addr,
+			  not_present ? "not present" : "rights violation",
+			  write ? "writing" : "reading",
+			  user ? "user" : "kernel");
+	  kill (f);
+	}
 }
 

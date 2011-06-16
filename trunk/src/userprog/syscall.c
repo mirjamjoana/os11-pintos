@@ -883,13 +883,13 @@ syscall_get_kernel_address (const void *uaddr)
 	}
 
 	/* Checks whether UADDR points to unmapped memory and whether it is a user address */
-	else if ( uaddr < (void *) 0x08048000 /* - 64 * 1024 * 1024 */ || uaddr >= PHYS_BASE)
+	else if ( uaddr < (void *) 0x08048000 || uaddr >= PHYS_BASE)
 	{
 		if(DEBUG) printf("Segmentation fault @ %x\n", (uint32_t) uaddr);
 	}
 	else
 	{
-		/* fetch pointer */
+		/* fetch pointer from page table */
 		void * address = pagedir_get_page(pd, uaddr);
 		if(address != NULL)
 			return address;
@@ -898,7 +898,7 @@ syscall_get_kernel_address (const void *uaddr)
 		if(DEBUG) printf("Address not found. Trying stack grow.\n");
 
 		/* check if syscall leads to uninitialized page */
-		if (is_legal_stack_growth((void*) uaddr, *thread_current()->esp))
+		if (is_legal_stack_growth((void*) uaddr, thread_current()->esp))
 		{
 			/*grow stack */
 			grow_stack((void *)uaddr);
