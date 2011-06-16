@@ -838,18 +838,36 @@ syscall_check_pointer (const void *uaddr, bool write)
 	/* check if address exists, exits if not */
 	void *kaddr = syscall_get_kernel_address(uaddr);
 
-	/* before we write check if write is enabled */
-	if(kaddr != NULL && write)
+	/* page table entry found */
+	if(kaddr != NULL)
 	{
-		uint32_t *pte = get_pte (thread_current()->pagedir, uaddr);
-
-		/* if read only exit */
-		if(!(*pte & PTE_W))
+		/* before we write check if write is enabled */
+		if(write)
 		{
-			thread_current()->exit_status = -1;
-			thread_exit();
+			uint32_t *pte = get_pte (thread_current()->pagedir, uaddr);
+
+			/* if read only exit */
+			if(*pte & PTE_W)
+				return;
+		}
+		else
+			return;
+
+	} else {
+		/* check if syscall leads to uninitialized page */
+		if (is_legal_stack_growth((void*) uaddr, *thread_current()->esp))
+		{
+			/*grow stack */
+			grow_stack((void *)uaddr);
+
+			/* back to interrupt handler */
+			return;
 		}
 	}
+
+	/* pointer is invalid */
+	thread_current()->exit_status = -1;
+	thread_exit();
 
 }
 

@@ -613,6 +613,7 @@ lazy_load (const char *file_name, void (**eip) (void), void **esp)
 	  file_close (file);
   else {
 	  t->executable = file;
+	  t->esp = esp;
 	  file_deny_write(file);
   }
 
