@@ -1035,18 +1035,32 @@ munmap (mapid_t map_id)
 	/* write pages back to file */
 	size_t size, length_left = length;
 	unsigned i;
+	void *kpage, *current_uaddr = uaddr;
 	for (i = 0; i < page_count; i++)
 	{
 		size = PGSIZE;
+
+		/* check if page has ever been mapped */
+		kpage = pagedir_get_page(thread_current()->pagedir, current_uaddr);
 
 		if (length_left % PGSIZE != 0) {
 			size = length_left % PGSIZE;
 		}
 
-		/* write back */
-		file_write(file, uaddr + (i * PGSIZE), size);
+		if(kpage != NULL)
+		{
+			/* write back */
+			file_write(file, kpage, size);
+		} else {
+			file_seek(file, file_tell(file) + size);
+		}
 
+		/* free page */
+		free_user_page(kpage);
+
+		/* decrement left length */
 		length_left -= size;
+		current_uaddr += PGSIZE;
 	}
 
 	ASSERT(length_left == 0);

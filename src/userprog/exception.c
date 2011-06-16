@@ -174,6 +174,7 @@ page_fault (struct intr_frame *f)
 
 	if(user){
 		/* illegal page fault - exit thread */
+		thread_current()->exit_status = -1;
 		thread_exit();
 	}
 
