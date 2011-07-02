@@ -10,12 +10,12 @@
 #define debug 0
 #include <stdio.h>
 
-void read_cache (block_sector_t bid, void * buffer, int offset, int readsize);
-void init_cache (void);
+void cache_read (block_sector_t bid, void * buffer, int offset, int readsize);
+void cache_init (void);
 
-void write_cache (block_sector_t bid, void * buffer, int offset, int writesize);
-void save_cachetable(void);
-void do_readahead (block_sector_t next);
+void cache_write (block_sector_t bid, void * buffer, int offset, int writesize);
+void cache_save_cachetable(void);
+void cache_do_readahead (block_sector_t next);
 
 //for the read ahead thread
 struct lock lock_readahead;
