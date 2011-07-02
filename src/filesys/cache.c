@@ -1,136 +1,152 @@
+#include <stdio.h>
 #include "filesys/cache.h"
+#include "filesys/filesys.h"
+#include "threads/thread.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
-#include <stdio.h>
 #include "threads/vaddr.h"
-#include "lib/kernel/bitmap.h"
 #include "threads/palloc.h"
-#include "filesys/filesys.h"
+#include "lib/kernel/bitmap.h"
 #include "lib/string.h"
 
-#include "threads/thread.h"
+void cache_evict (void);
+void cache_add_readahead_block(block_sector_t next);
 
-#define cache_size 64
+struct cache_block
+{
+	/* block id on disk */
+	block_sector_t bid;
 
-void evict_cache (void);
-//void add_readahead(block_sector_t next);
+	/* corresponding kernel page */
+	void * kpage;
 
-struct cache_block {
-
-  /* block sector on disk */
-  block_sector_t bid;
-  
-  /* corresponding kernel page */
-  void * kpage;
-  
-  /* fields to check access and if someone wrote to the page */
-  bool dirty; 
-  bool accessed;
-  int reader;
-  int writer;
-
+	/* fields to check access and if someone wrote to the page */
+	bool dirty;
+	bool accessed;
+	int reader;
+	int writer;
 };
 
+/* how many blocks fit in one page */
+int blocks_per_page = (PGSIZE/BLOCK_SECTOR_SIZE);
 
-/* how many blocks is one page */
-int SECPP = (PGSIZE/BLOCK_SECTOR_SIZE);
+/* the cache */
+struct cache_block *cache[CACHE_SIZE];
 
-/* cache array */
-struct cache_block * cache[cache_size];
+/* bitmap of free cache blocks */
+struct bitmap *cache_table;
 
-/*bitmap to identify free entries */
-struct bitmap * cache_table;
-
+/* global cache lock */
 struct lock cache_globallock;
 
-void cache_init () {
-
+/* initializes the cashing system */
+void
+cache_init ()
+{
+	/* loop variables */
 	int i,j;
 
-	for (i = 0; i < (cache_size / SECPP); i++) {
+	/* allocate kernel pages for cache */
+	for (i = 0; i < (CACHE_SIZE / blocks_per_page); i++)
+	{
 		/* get a page from kernel memory */
-		void * kpage = palloc_get_page (PAL_ZERO);
-		for (j = 0; j < SECPP; j++) {
+		void *kpage = palloc_get_page (PAL_ZERO);
+		for (j = 0; j < blocks_per_page; j++)
+		{
 			/* init the block */                        
-			struct cache_block * c = (struct cache_block *)malloc(sizeof(struct cache_block));
+			struct cache_block *c = (struct cache_block*) malloc(sizeof(struct cache_block));
 
 			c->reader = 0;
 			c->writer = 0;
 			c->bid = -1;
-			c->kpage = kpage + BLOCK_SECTOR_SIZE * j;
+			c->kpage = kpage + j * BLOCK_SECTOR_SIZE ;
 			c->dirty = false;
 			c->accessed = false;
 
-			cache[i * SECPP + j] = c;
+			/* save to cache */
+			cache[i * blocks_per_page + j] = c;
 		}
 	}
 
-	lock_init(&cache_globallock);
-
 	/*create a bitmap that represents the free entries in the cache table */
-	cache_table = bitmap_create (cache_size);
+	cache_table = bitmap_create (CACHE_SIZE);
+
+	/* init lock */
+	lock_init(&cache_globallock);
 }
 
-/* adds a block to cache */
-static size_t cache_add (block_sector_t bid) {
 
-	/* lock the swap table */
+/* adds a block to cache */
+static size_t
+cache_add (block_sector_t bid)
+{
+	/* lock the cache */
 	lock_acquire(&cache_globallock);
 
-	/* find a free entry in the bitmap table */
-	size_t free = bitmap_scan (cache_table, 0, 1, false);
-	/* if the swap table is full panic the kernel */
-	if (free == BITMAP_ERROR) { 
-		evict_cache ();
-		free = bitmap_scan (cache_table, 0, 1, false);
+	/* lock for a free_cache_block cache block */
+	size_t free_cache_block = bitmap_scan (cache_table, 0, 1, false);
+
+	/* if no free cache block is found, evict one and
+	 * search again */
+	if (free_cache_block == BITMAP_ERROR) {
+		cache_evict();
+		free_cache_block = bitmap_scan (cache_table, 0, 1, false);
 	}
 
-	ASSERT(free != BITMAP_ERROR);
-	//printf("add cache block %d\n",bid);
-	/* write block to cache, free * SECPP is the correct block position and + i 
-	because a page has a different size, same for addr */
-	block_read (fs_device, bid, cache[free]->kpage);
-	cache[free]->dirty = false;
-	cache[free]->accessed = false;
-	cache[free]->bid = bid;
+	ASSERT(free_cache_block != BITMAP_ERROR);
+	if(DEBUG) printf("add cache block %d\n",bid);
 
-	/* set the corresponding entry in the cache table to true */
-	bitmap_set (cache_table, free, true);
+	/* copy block to cache */
+	block_read (fs_device, bid, cache[free_cache_block]->kpage);
+
+	/* setup cache entry */
+	cache[free_cache_block]->dirty = false;
+	cache[free_cache_block]->accessed = false;
+	cache[free_cache_block]->bid = bid;
+
+	/* set used bit of the cache table for this entry */
+	bitmap_set (cache_table, free_cache_block, true);
 
 	/* release the lock for the cache table */
 	lock_release(&cache_globallock);
 
-	return free;
-
+	return free_cache_block;
 }
 
-/* write the cache entry back to disk */
-static void cache_writeback (int idx) {
 
-	if(bitmap_test (cache_table,idx) == false) return;
+/* write the cache entry back to disk */
+static void
+cache_writeback (int idx)
+{
+	ASSERT(bitmap_test (cache_table,idx));
+	ASSERT(lock_held_by_current_thread(&cache_globallock));
         
 	/* register as writer */
 	cache[idx]->writer++;
+
 	/* if cache block is dirty right it back */
-	if (cache[idx]->dirty == true)
+	if (cache[idx]->dirty)
 		block_write(fs_device, cache[idx]->bid, cache[idx]->kpage);
+
 	/* unregister as writer */
 	cache[idx]->writer--;
-
 }
+
 
 /* finds the block in the cache table, returns -1 if it isn't in cache
 the rw flag is to increase the read ( 0 ) or write ( 1 ) variable in order to avoid race conditions 
 between reading the cache block and reading or writing to it */
-static int cache_find_sector (block_sector_t bid, int rw) {
-
+static int
+cache_find_block (block_sector_t bid, int read_write)
+{
 	lock_acquire(&cache_globallock);
 
 	int i;
-	for (i = 0; i < cache_size ; i++) {
-		if (cache[i]->bid == bid) {
-			if ( rw == 0 ) cache[i]->reader++;
-			if ( rw == 1 ) cache[i]->writer++;
+	for (i = 0; i < CACHE_SIZE ; i++) {
+		if (cache[i]->bid == bid)
+		{
+			if ( read_write == CACHE_READ ) cache[i]->reader++;
+			if ( read_write == CACHE_WRITE ) cache[i]->writer++;
 
 			lock_release(&cache_globallock);                        
             return i;
@@ -142,105 +158,150 @@ static int cache_find_sector (block_sector_t bid, int rw) {
 	return -1;
 }
 
-/* reads from a block which is in cache to a buffer, buffer has to be at the correct position */
-void cache_read (block_sector_t bid, void * buffer, int offset, int readsize) {
 
-	ASSERT( offset < BLOCK_SECTOR_SIZE);
+/* read size bytes from block bid beginning at offset into buffer */
+void
+cache_read (block_sector_t bid, void * buffer, int offset, int size)
+{
+	ASSERT(offset < BLOCK_SECTOR_SIZE);
 
-	int get = find_sector(bid,0);
+	int cache_id = cache_find_block(bid, CACHE_READ);
         
 	/* if not found load into cache */
-	if(get == -1) { 
-		get = add_cache(bid);
-		//ASSERT(get != -1);
-		cache[get]->reader++;
-		//add_readahead(bid + 1);
+	if(cache_id == -1)
+	{
+		/* copy block from disk */
+		cache_id = cache_add(bid);
+		ASSERT(cache_id != -1);
+
+		cache[cache_id]->reader++;
+
+		/* add read-ahead block */
+		//TODO cache_readahead(bid + 1);
 	}
 
 	/* copy the corresponding section into buffer */
-	memcpy (buffer,(cache[get]->kpage + offset), readsize);
+	memcpy (buffer, cache[cache_id]->kpage + offset, size);
 
-	cache[get]->accessed = true;
-
-	cache[get]->reader--;
-
+	/* update cache flags */
+	cache[cache_id]->accessed = true;
+	cache[cache_id]->reader--;
 }
 
-/* write into cache from buffer, buffer has to be at the correct position */
-void cachewrite (block_sector_t bid, void * buffer, int offset, int writesize) {
 
-	ASSERT( offset < BLOCK_SECTOR_SIZE);
+/* write size bytes from buffer into cache block */
+void
+cache_write (block_sector_t bid, const void *buffer, int offset, int size)
+{
+	ASSERT(offset < BLOCK_SECTOR_SIZE);
 
-	int get = find_sector(bid,1);
+	/* find cache block */
+	int cache_id = cache_find_block(bid, CACHE_WRITE);
         
-	/* if not found load into cache */
-	if(get == -1) { 
-		get = add_cache(bid);
-		cache[get]->writer++;
-	}
+	/* if cache block not present, load */
+	if(cache_id == -1)
+		cache_id = cache_add(bid);
 
-	/* copy the corresponding section into buffer */
-	memcpy (cache[get]->kpage + offset, buffer, writesize);
-	cache[get]->accessed = true;
-	cache[get]->dirty = true;
+	ASSERT(cache_id != -1);
 
-	cache[get]->writer--;
+	cache[cache_id]->writer++;
 
+	/* copy buffer content into cache */
+	memcpy (cache[cache_id]->kpage + offset, buffer, size);
+	cache[cache_id]->accessed = true;
+	cache[cache_id]->dirty = true;
+
+	cache[cache_id]->writer--;
 }
 
-/* evicts a block in cache with the second chance algorithm */
-void cache_evict () {
 
-	int i,idx = - 1;
-	while (idx == -1) {
-    	for ( i = 0; i < cache_size; i++ ) {
-        	/* trying the second chance algorithm */
-            if (cache[i]->writer == 0 && cache[i]->reader == 0) {
-            	if (cache[i]->accessed == false) {
-                	idx = i;
-                    writeback_cache(idx);
-                    bitmap_set (cache_table, idx, false);
-                    return;
-                } else cache[i]->accessed = false;
+/* evicts a cache block */
+void
+cache_evict ()
+{
+	ASSERT(lock_held_by_current_thread(&cache_globallock));
+
+	/* loop variables */
+	int i;
+
+	/* as long as no cache block has been evicted */
+	while (true)
+	{
+		/* search cache block to evict */
+    	for ( i = 0; i < CACHE_SIZE; i++ )
+    	{
+    		/* if no one is writing and reading the block */
+            if (cache[i]->writer == 0 && cache[i]->reader == 0)
+            {
+            	/* if cache block is dirty, write back and
+            	 * give it a second chance */
+            	if (cache[i]->dirty)
+            	{
+            		cache_writeback(i);
+            		cache[i]->dirty = false;
+            		cache[i]->accessed = false;
+            	}
+            	/* if cache block was accessed before
+            	 * give it a second chance */
+            	else if (cache[i]->accessed)
+            	{
+            		cache[i]->accessed = false;
+                }
+            	/* if cache block was not accessed nor
+            	 * written in the last clock turn
+            	 * evict it */
+            	else
+                {
+					bitmap_set (cache_table, i, false);
+					/* zero block first? */
+					return;
+                }
 			}
 		}
 	}
 }
 
-/* this function destroys the cache table and writes back all the entries if necessary */
-void cache_save_cachetable() {
 
+/* flush the cash - write back all dirty blocks */
+void
+cache_flush()
+{
 	lock_acquire(&cache_globallock);
         
 	int i;
-	for (i = 0; i < cache_size; i++){       
-		writeback_cache(i);
-	}
+	for (i = 0; i < CACHE_SIZE; i++)
+		cache_writeback(i);
 
 	lock_release(&cache_globallock);
 }
 
-/* this function expands the cache table?  */
-/*  SCHEINBAR NICHT NOETIG
-void add_readahead(block_sector_t next) {
 
-        lock_acquire(&lock_readahead);
-        
-        struct readahead * r = (struct readahead *) malloc ( sizeof(struct readahead));
+/* adds block next of the file to the read-ahead list  */
+void
+cache_add_readahead_block(block_sector_t next)
+{
+	lock_acquire(&lock_readahead);
 
-        r->bid = next;
-        /* add to list */
-        //list_push_back (&list_readahead, &r->elem);
-        /* signal wake up to thread */
-        /*cond_signal(&cond_readahead,&lock_readahead);
-        lock_release(&lock_readahead);
-}*/
+	/* create read-ahead element */
+	struct readahead * r = (struct readahead *) malloc ( sizeof(struct readahead));
+	r->bid = next;
 
-/* loads the read ahead block */
-void cache_do_readahead (block_sector_t next) {
+	/* add to read-ahead list */
+	list_push_back (&list_readahead, &r->elem);
 
-	if (find_sector(next,-1) == -1) {
-		add_cache (next);
-	}
+	/* signal wake up to thread */
+	cond_signal(&cond_readahead,&lock_readahead);
+
+	lock_release(&lock_readahead);
 }
 
+
+/* load read-ahead block */
+void
+cache_readahead (block_sector_t bid)
+{
+	/* if block is not in cache, load it */
+	if (cache_find_block(bid,-1) == -1) {
+		cache_add (bid);
+	}
+}

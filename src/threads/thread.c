@@ -13,11 +13,10 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "filesys/file.h"
+
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
-
-#define DEBUG 0
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top

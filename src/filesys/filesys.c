@@ -6,6 +6,7 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "filesys/cache.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -17,17 +18,20 @@ static void do_format (void);
 void
 filesys_init (bool format) 
 {
-  fs_device = block_get_role (BLOCK_FILESYS);
-  if (fs_device == NULL)
-    PANIC ("No file system device found, can't initialize file system.");
+	fs_device = block_get_role(BLOCK_FILESYS);
 
-  inode_init ();
-  free_map_init ();
+	if (fs_device == NULL)
+		PANIC ("No file system device found, can't initialize file system.");
 
-  if (format) 
-    do_format ();
+	inode_init();
+	free_map_init();
 
-  free_map_open ();
+	if (format)
+		do_format();
+
+	free_map_open();
+
+	cache_init();
 }
 
 /* Shuts down the file system module, writing any unwritten data
@@ -35,7 +39,8 @@ filesys_init (bool format)
 void
 filesys_done (void) 
 {
-  free_map_close ();
+	cache_flush();
+	free_map_close ();
 }
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
