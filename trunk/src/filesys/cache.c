@@ -43,7 +43,7 @@ struct bitmap * cache_table;
 
 struct lock cache_globallock;
 
-void init_cache () {
+void cache_init () {
 
         int i,j;
 
@@ -72,7 +72,7 @@ void init_cache () {
 }
 
 /* adds a block to cache */
-static size_t add_cache (block_sector_t bid) {
+static size_t cache_add (block_sector_t bid) {
 
         /* lock the swap table */
         lock_acquire(&cache_globallock);
@@ -105,7 +105,7 @@ static size_t add_cache (block_sector_t bid) {
 }
 
 /* write the cache entry back to disk */
-static void writeback_cache (int idx) {
+static void cache_writeback (int idx) {
 
         if(bitmap_test (cache_table,idx) == false) return;
         
@@ -122,7 +122,7 @@ static void writeback_cache (int idx) {
 /* finds the block in the cache table, returns -1 if it isn't in cache
 the rw flag is to increase the read ( 0 ) or write ( 1 ) variable in order to avoid race conditions 
 between reading the cache block and reading or writing to it */
-static int find_sector (block_sector_t bid, int rw) {
+static int cache_find_sector (block_sector_t bid, int rw) {
 
         lock_acquire(&cache_globallock);
 
@@ -143,7 +143,7 @@ static int find_sector (block_sector_t bid, int rw) {
 }
 
 /* reads from a block which is in cache to a buffer, buffer has to be at the correct position */
-void read_cache (block_sector_t bid, void * buffer, int offset, int readsize) {
+void cache_read (block_sector_t bid, void * buffer, int offset, int readsize) {
 
         ASSERT( offset < BLOCK_SECTOR_SIZE);
 
@@ -167,7 +167,7 @@ void read_cache (block_sector_t bid, void * buffer, int offset, int readsize) {
 }
 
 /* write into cache from buffer, buffer has to be at the correct position */
-void write_cache (block_sector_t bid, void * buffer, int offset, int writesize) {
+void cachewrite (block_sector_t bid, void * buffer, int offset, int writesize) {
 
         ASSERT( offset < BLOCK_SECTOR_SIZE);
 
@@ -189,7 +189,7 @@ void write_cache (block_sector_t bid, void * buffer, int offset, int writesize) 
 }
 
 /* evicts a block in cache with the second chance algorithm */
-void evict_cache () {
+void cache_evict () {
 
         int i,idx = - 1;
         while (idx == -1) {
@@ -209,7 +209,7 @@ void evict_cache () {
 }
 
 /* this function destroys the cache table and writes back all the entries if necessary */
-void save_cachetable() {
+void cache_save_cachetable() {
 
         lock_acquire(&cache_globallock);
         
@@ -238,7 +238,7 @@ void add_readahead(block_sector_t next) {
 }*/
 
 /* loads the read ahead block */
-void do_readahead (block_sector_t next) {
+void cache_do_readahead (block_sector_t next) {
 
         if (find_sector(next,-1) == -1) {
                 add_cache (next);
