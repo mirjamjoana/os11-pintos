@@ -6,9 +6,6 @@
 #include <stdint.h>
 #include "filesys/file.h"
 #include "threads/synch.h"
-#include <hash.h>
-
-#define DEBUG 0
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -23,8 +20,6 @@ enum thread_status
    You can redefine this to whatever type you like. */
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
-typedef int mapid_t;
-#define MAP_FAILED ((mapid_t) -1)          /* Error value for mapid_t. */
 
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
@@ -104,7 +99,6 @@ struct thread
     struct thread * parent;				/* parent of the this thread */
     struct list children;				/* List of children (including exit status). */
     struct list file_descriptors;		/* List of file descriptors. */
-    struct list mappings;               /* List of mapped files */
     unsigned int fd_next_id;			/* Consecutively numbered identifier for file descriptors */
 
     /* Shared between thread.c and synch.c. */
@@ -115,12 +109,6 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-#endif
-
-#ifdef VM
-    /* Owned by vm/page.c. */
-    struct hash sup_page_table;         /* Supplemental Page Table. */
-    void* esp;							/* User stack pointer. */
 #endif
 
     /* Owned by thread.c. */
@@ -147,16 +135,6 @@ struct file_descriptor_elem
     struct list_elem elem;				/* list dummy */
     int file_descriptor;				/* file handler number */
     struct file *file; 					/* file link */
-  };
-  
-struct mapping_elem
-  {
-    struct list_elem elem;				/* list dummy */
-    mapid_t mapid;                        /* mapping identifier */
-    void *addr;                         /* virtual address of mapping */
-    int page_count;                  /* number of mapped pages */
-    struct file *file;  /* reopened file for mapping purposes */
-    uint32_t length;	/* file length */
   };
 
 /* If false (default), use round-robin scheduler.

@@ -2,23 +2,20 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include <list.h>
-#include <string.h>
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
-#include "threads/palloc.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "devices/shutdown.h"
-#include "vm/page.h"
-#include "threads/pte.h"
 
 #define CONSOLE_BUFFER_SIZE 100
 #define MAX_OPEN_FILES 128
+#define DEBUG 0 
 #define DEBUG_PUTBUF 0
 
 /* prototypes */
@@ -38,15 +35,12 @@ static void handle_seek(struct intr_frame *f);
 static void handle_tell(struct intr_frame *f);
 static void handle_close(struct intr_frame *f);
 static void handle_no_such_syscall(struct intr_frame *f);
-static void handle_mmap(struct intr_frame *f);
-static void handle_munmap(struct intr_frame *f);
 
 static void* syscall_get_argument(const struct intr_frame *f, unsigned int arg_number);
 static void syscall_set_return_value (struct intr_frame *f, int ret_value);
 static void* syscall_get_kernel_address (const void *uaddr);
 static struct file* syscall_get_file(int file_descriptor);
-static void syscall_check_pointer(const void * ptr, bool write);
-static struct mapping_elem* get_mmap_file(mapid_t id);
+static void syscall_check_pointer(const void * ptr);
 
 void halt (void);
 void exit (int status);
@@ -61,8 +55,6 @@ int write (int fd, const void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
-mapid_t mmap(int fd, void *addr);
-void munmap(mapid_t mapping);
 
 /* global variables */
 extern struct lock filesystem_lock; /* mutex semaphore for filesystem */
@@ -139,18 +131,10 @@ syscall_handler (struct intr_frame *f)
 		case SYS_TELL:
 			handle_tell(f);
 			break;
-		
+
 		case SYS_CLOSE:
 			handle_close(f);
 			break;
-
-		case SYS_MMAP:
-			handle_mmap(f);
-			break;	
-			
-		case SYS_MUNMAP:
-			handle_munmap(f);
-			break;	
 
 		default: /* SYSCALL_ERROR: */
 			handle_no_such_syscall(f);
@@ -184,7 +168,7 @@ handle_exec(struct intr_frame *f)
 	char* cmd_line = (char *) syscall_get_argument(f, 0); /* command line input */
 
 	/* check pointer */
-	syscall_check_pointer((const void *)cmd_line, false);
+	syscall_check_pointer((const void *)cmd_line);
 
 	/* switch to exec method and save process id pid */
 	int pid = exec(cmd_line);
@@ -216,7 +200,7 @@ handle_create(struct intr_frame *f UNUSED)
 	if(DEBUG) printf("create\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
-	syscall_check_pointer((const void *) file, false);	/* check the file */
+	syscall_check_pointer((const void *) file);	/* check the file */
 	
 	unsigned int initial_size = (unsigned int) syscall_get_argument(f, 1); /* initial file size */
 
@@ -240,7 +224,7 @@ handle_remove(struct intr_frame *f)
 	if(DEBUG) printf("remove\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
-	syscall_check_pointer((const void *)file, false);	/* check the file */
+	syscall_check_pointer((const void *)file);	/* check the file */
 
 	/* remove file and save success */
 	bool success = remove(file);
@@ -261,7 +245,7 @@ handle_open(struct intr_frame *f)
 	if(DEBUG) printf("open\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
-	syscall_check_pointer((const void *) file, false);	/* check the file */
+	syscall_check_pointer((const void *) file);	/* check the file */
 
 	/* remove file and save success */
 	int handle = open(file);
@@ -305,7 +289,7 @@ handle_read(struct intr_frame *f)
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	
 	void * buffer = (void *) syscall_get_argument(f, 1); /* target buffer pointer */
-	syscall_check_pointer(buffer, true);	/* check the buffer */
+	syscall_check_pointer(buffer);	/* check the buffer */
 
 	unsigned int size = (unsigned int) syscall_get_argument(f, 2); /* target buffer size */
 
@@ -328,7 +312,7 @@ handle_write(struct intr_frame *f)
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	const void *buffer = (const void*) syscall_get_argument(f, 1); /* target buffer pointer */
-	syscall_check_pointer(buffer, true);	/* check the buffer */
+	syscall_check_pointer(buffer);	/* check the buffer */
 
 	unsigned size = (unsigned int) syscall_get_argument(f, 2); /* target buffer size */
 
@@ -394,44 +378,6 @@ handle_close(struct intr_frame *f UNUSED)
 
 	/* fetch position of file fd */
 	close(fd);
-
-	/* release file system lock */
-	lock_release(&filesystem_lock);
-}
-
-static void 
-handle_mmap(struct intr_frame *f UNUSED) 
-{	
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
-
-	if(DEBUG) printf("mmap\n");
-
-	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
-	void *addr = (void*) syscall_get_argument(f, 1); /* target mapping pointer */
-
-	/* map file fd to addr */
-	mapid_t mapid = mmap(fd, addr);
-	
-	/* return position */
-	syscall_set_return_value(f, (int) mapid);
-
-	/* release file system lock */
-	lock_release(&filesystem_lock);
-}
-
-static void 
-handle_munmap(struct intr_frame *f UNUSED) 
-{	
-	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
-
-	if(DEBUG) printf("munmap\n");
-
-	mapid_t mapping = (int) syscall_get_argument(f, 0); /* map id */
-
-	/* unmap file specified by mapping */
-	munmap(mapping);
 
 	/* release file system lock */
 	lock_release(&filesystem_lock);
@@ -832,41 +778,15 @@ syscall_set_return_value (struct intr_frame *f, int ret_value)
 
 /* Checks whether any given pointer is valid */
 static void
-syscall_check_pointer (const void *uaddr, bool write)
+syscall_check_pointer (const void *ptr) 
 {
-	/* check if address exists, exits if not */
-	void *kaddr = syscall_get_kernel_address(uaddr);
-
-	if(DEBUG) printf("Checking pointer .. ");
-
-	/* page table entry found */
-	if(kaddr != NULL)
-	{
-		if(DEBUG) printf("found.\n ");
-		/* before we write check if write is enabled */
-		if(write)
-		{
-			uint32_t *pte = get_pte (thread_current()->pagedir, uaddr);
-
-			/* if read only exit */
-			if(*pte & PTE_W)
-				return;
-		}
-		else
-			return;
-
-	}
-
-	/* pointer is invalid */
-	thread_current()->exit_status = -1;
-	thread_exit();
-
+	syscall_get_kernel_address(ptr);
 }
 
 
 /*
  * Gets the kernel virtual space address of user space
- * address uaddr. Exits thread if uaddr points to not
+ * address uaddr. Returns NULL if uaddr points to not
  * accessible memory.
  */
 static void *
@@ -879,37 +799,27 @@ syscall_get_kernel_address (const void *uaddr)
 	if (pd == NULL || uaddr == NULL)
 	{
 		if(DEBUG) printf("Null pointer.\n");
+		current_thread->exit_status = -1;
+		thread_exit();
 	}
 
 	/* Checks whether UADDR points to unmapped memory and whether it is a user address */
-	else if ( uaddr < (void *) 0x08048000 || uaddr >= PHYS_BASE)
+	else if ( uaddr < (void *) 0x08048000 /* - 64 * 1024 * 1024 */ || uaddr >= PHYS_BASE)
 	{
 		if(DEBUG) printf("Segmentation fault @ %x\n", (uint32_t) uaddr);
+		current_thread->exit_status = -1;
+		thread_exit();
 	}
 	else
 	{
-		/* fetch pointer from page table */
+		/* fetch pointer */
 		void * address = pagedir_get_page(pd, uaddr);
 		if(address != NULL)
 			return address;
 
-		/* find out if stack growth is legal */
-		if(DEBUG) printf("Address not found. Trying stack grow.\n");
-
-		/* check if syscall leads to uninitialized page */
-		if (is_legal_stack_growth((void*) uaddr, thread_current()->esp))
-		{
-			/*grow stack */
-			grow_stack((void *)uaddr);
-
-			/* back to syscall */
-			return pagedir_get_page(pd, uaddr);
-		}
+		current_thread->exit_status = -1;
+		thread_exit();
 	}
-
-	current_thread->exit_status = -1;
-	thread_exit();
-
 }
 
 /*
@@ -940,172 +850,5 @@ syscall_get_file(int file_descriptor)
 	}
 
 	/* if no file descriptor is found, return null */
-	return NULL;
-}
-
-/* maps file fd into virtual pages beginning at addr */
-mapid_t 
-mmap (int fd, void *addr) 
-{
-	/* fails if file has a length of zero bytes */
-	if (filesize(fd) <= STDOUT_FILENO) {
-		return MAP_FAILED;
-	}
-	/* fails if addr is zero */
-	else if (addr == NULL) {
-		return MAP_FAILED;
-	}
-	/* checks whether address is page-aligned*/
-	else if (pg_ofs(addr) != 0) {
-	    return MAP_FAILED;
-	}
-
-	/* get file of file descriptor fd */
-	struct file *f = syscall_get_file(fd);
-
-	/* create backup file handle */
-	struct file *file = file_reopen(f);
-
-	/* file length */
-	size_t size = file_length(file);
-
-	/* computes the number of pages that are necessary */
-	unsigned int page_count;
-	if (size % PGSIZE != 0) {
-		page_count = ((size / PGSIZE) + 1);
-	}
-	else {
-		page_count = (size / PGSIZE);
-	}
-
-	/* check if the memory area requested is free */
-	unsigned int i;
-	for (i = 0; i < page_count; i++) {
-		if (pagedir_get_page (thread_current()->pagedir, addr + (i * PGSIZE)) != NULL)
-			return MAP_FAILED;
-	 }
-
-	/* create sup page table entries
-	 * for lazy allocation */
-	for (i = 0; i < page_count; i++) {
-		create_lazy_mmap_page (file,(uint32_t) size, i * PGSIZE, addr + i * PGSIZE);
-	}
-
-	/* create new mmap element */
-	struct mapping_elem *mmap_file = (struct mapping_elem *) malloc(sizeof(struct mapping_elem));
-
-	mmap_file->mapid = fd;
-	mmap_file->page_count = page_count;
-	mmap_file->file = file;
-	mmap_file->addr = addr;
-	mmap_file->length = size;
-
-	struct list* mmap_files = &(thread_current()->mappings);
-
-	/* insert new map element into list of mappings */
-	list_push_front(mmap_files, &mmap_file->elem);
-
-	return mmap_file->mapid;
-}
-
-
-/* Unmaps the mapping designated by mapping, which must be a mapping ID 
-returned by a previous call to mmap by the same process that has not yet been 
-unmapped.  */
-void 
-munmap (mapid_t map_id)
-{   
-	/* search mmap file with id map_id */
-	struct mapping_elem *mmap_file = get_mmap_file(map_id);
-
-	/* if no mapping has been found */
-	if(mmap_file == NULL) {
-		thread_current()->exit_status = -1;
-		thread_exit();
-	}
-
-	unsigned int page_count = (unsigned int) mmap_file->page_count;
-	void* uaddr = mmap_file->addr;
-	struct file *file = mmap_file->file;
-	size_t length = (size_t) mmap_file->length;
-
-	/* jump to file start */
-	file_seek(file, (off_t) 0);
-
-	if(DEBUG) printf("start unmapping files\n");
-
-	/* write pages back to file */
-	size_t size, length_left = length;
-	unsigned i;
-	void *kpage, *current_uaddr = uaddr;
-	for (i = 0; i < page_count; i++)
-	{
-		size = PGSIZE;
-
-		/* check if page has ever been mapped */
-		kpage = pagedir_get_page(thread_current()->pagedir, current_uaddr);
-
-		if(DEBUG) printf("unmap kpage %x\n", (uint32_t) kpage);
-
-		if (length_left % PGSIZE != 0) {
-			size = length_left % PGSIZE;
-		}
-
-		if(kpage != NULL)
-		{
-			/* write back */
-			file_write(file, kpage, size);
-
-			/* free page */
-			free_user_page(kpage);
-
-		} else {
-			file_seek(file, file_tell(file) + size);
-			delete_lazy_mmap_page(current_uaddr);
-		}
-
-		/* decrement left length */
-		length_left -= size;
-		current_uaddr += PGSIZE;
-	}
-
-	ASSERT(length_left == 0);
-
-	/* close file */
-	file_close(file);
-
-	/* remove mapping */
-	list_remove(&(mmap_file->elem));
-
-	/* free resources */
-	free(mmap_file);
-
-	if(DEBUG) printf("finished munmap\n");
-}
-
-
-static struct mapping_elem*
-get_mmap_file(mapid_t id)
-{
-	/* get threads file descriptors */
-	struct list* mappings = &(thread_current()->mappings);
-
-	/* loop variables */
-	struct list_elem *e;
-	struct mapping_elem *mmap_file;
-
-	/* search matching file */
-	for (e = list_begin (mappings); e != list_end (mappings); e = list_next(e))
-	{
-		 /* fetch list element */
-		mmap_file = list_entry (e, struct mapping_elem, elem);
-
-		/* if the right file descriptor has been found fetch mapid, page_count, addr and file */
-		if (mmap_file->mapid == id)
-		{
-			return mmap_file;
-		}
-	}
-
 	return NULL;
 }

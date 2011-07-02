@@ -19,16 +19,12 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "threads/pte.h"
-#include "vm/page.h"
-#include "vm/frame.h"
 
-#define DEBUG_EXIT 0
+#define DEBUG_EXIT 0 
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 struct child* process_get_child(struct thread* parent, tid_t child_tid);
-static bool first = true;
 
 /* global variable */
 extern struct lock filesystem_lock;
@@ -73,11 +69,6 @@ process_execute (const char *command_line_input)
 static void
 start_process (void *command_line_input)
 {
-	#if VM
-	  /* intialize supplemental page table */
-	  hash_init(&thread_current()->sup_page_table, sup_page_hash, sup_page_less, NULL);
-	#endif
-
     /* loop variables */
     char *token, *save_ptr;
 
@@ -89,9 +80,9 @@ start_process (void *command_line_input)
 	int argument_count = 0;
 	for (token = strtok_r ((char *)command_line_input, " ", &save_ptr); token != NULL;
 		token = strtok_r (NULL, " ", &save_ptr)){
-		   argument_count++;
+		   argument_count++;		
 	}
-
+	
 	/* create array of argument pointers */
 	char** arguments = malloc(argument_count * sizeof(char*));
 
@@ -105,7 +96,9 @@ start_process (void *command_line_input)
 	for (token = strtok_r ((char *)command_line_input_copy, " ", &save_ptr); token != NULL;
 		token = strtok_r (NULL, " ", &save_ptr))
 	{
+		   //printf("token %i: %s @ %x [%i bytes]\n", i, token, (unsigned)token, strlen(token));
 		   arguments[i] = token;
+		   //printf("token %i: %s @ %x [%i bytes] -- CHECK\n", i, arguments[i], (unsigned)arguments[i], strlen(arguments[i]));
 		   i++;
 	}
 
@@ -122,10 +115,10 @@ start_process (void *command_line_input)
 	if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
 	if_.cs = SEL_UCSEG;
 	if_.eflags = FLAG_IF | FLAG_MBS;
-
+	
 	/* aquire file lock, load and release */
 	lock_acquire(&filesystem_lock);
-	success = lazy_load (file_name, &if_.eip, &if_.esp);
+	success = load (file_name, &if_.eip, &if_.esp);
 	lock_release(&filesystem_lock);
 
 	/* If load failed, quit. */
@@ -136,8 +129,40 @@ start_process (void *command_line_input)
 	/* free resources */
 	palloc_free_page (command_line_input);
 
+    /* copy arguments on stack. example stack:
+     *
+	Address         Name			Data			Type
+	0xbffffffc      argv[3][...]    "bar\0"			char[4]
+	0xbffffff8      argv[2][...]    "foo\0"			char[4]
+	0xbffffff5      argv[1][...]    "-l\0"			char[3]
+	0xbfffffed      argv[0][...]    "/bin/ls\0"		char[8]
+	0xbfffffec      word-align      0				uint8_t
+	0xbfffffe8      argv[4]         0				char *
+	0xbfffffe4      argv[3]         0xbffffffc		char *
+	0xbfffffe0      argv[2]         0xbffffff8		char *
+	0xbfffffdc      argv[1]         0xbffffff5		char *
+	0xbfffffd8      argv[0]         0xbfffffed		char *
+	0xbfffffd4      argv            0xbfffffd8		char **
+	0xbfffffd0      argc            4				int
+	0xbfffffcc      return address  0				void (*) ()
+
+no argument:
+	Address         Name			Data			Type
+	0xbffffff0      argv[0][...]    "args-none\0"	char[8]
+	0xbfffffec      word-align      0				uint8_t
+	0xbfffffdc      argv[1]         0				char *
+	0xbfffffd8      argv[0]         0xbfffffed		char *
+	0xbfffffd4      argv            0xbfffffd8		char **
+	0xbfffffd0      argc            1				int
+	0xbfffffcc      return address  0				void (*) ()
+	*/
+
     /* get stack pointer */
     void* esp = if_.esp;
+    void* initial_esp = esp; /* debug */
+
+
+  //  printf("Start copying %i arguments to stack. ESP: %x\n", argument_count, (unsigned) esp);
 
     /* loop variables */
     int j;
@@ -160,8 +185,10 @@ start_process (void *command_line_input)
 
             /* store argument stack pointer */
             arguments[j] = esp;
+		
+	   // printf("copying %i bytes from  %x to %x\n", size, (unsigned) src, (unsigned) esp);
             
-            /* copy argument */
+	    /* copy argument */
             memcpy(esp, src, size);
     }
 
@@ -203,6 +230,11 @@ start_process (void *command_line_input)
     /* push return address on the stack */
     esp -= sizeof(uint32_t);
     *((uint32_t *) esp) = (uint32_t) 0;
+
+//    printf("Finished copying arguments on stack.\n");
+
+    /* debugging */
+    //hex_dump((uintptr_t) 0, esp, (unsigned) initial_esp - (unsigned) esp, true);
 
     /* update frame esp */
     if_.esp = esp;
@@ -254,7 +286,7 @@ process_wait (tid_t child_tid)
 
 		/* remove terminated child from list */
 		list_remove(&child->elem);
-
+		
 		/* free resources */
 		free(child);
 
@@ -279,7 +311,7 @@ process_exit (void)
 	/* get file system mutex */
 	if(!lock_held_by_current_thread(&filesystem_lock))
 		lock_acquire(&filesystem_lock);
-
+	
 	/* close all open files and empty file list */
 	while(!list_empty(&thread_current()->file_descriptors))
 	{
@@ -317,9 +349,6 @@ process_exit (void)
 		/* free child element */
 		free(c);
 	}
-
-	/* cleanup user pages */
-	destroy_user_pages();
 
 	/* Destroy the current process's page directory and switch back
 	 to the kernel-only page directory. */
@@ -386,9 +415,39 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
-
+
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
+
+/* ELF types.  See [ELF1] 1-2. */
+typedef uint32_t Elf32_Word, Elf32_Addr, Elf32_Off;
+typedef uint16_t Elf32_Half;
+
+/* For use with ELF types in printf(). */
+#define PE32Wx PRIx32   /* Print Elf32_Word in hexadecimal. */
+#define PE32Ax PRIx32   /* Print Elf32_Addr in hexadecimal. */
+#define PE32Ox PRIx32   /* Print Elf32_Off in hexadecimal. */
+#define PE32Hx PRIx16   /* Print Elf32_Half in hexadecimal. */
+
+/* Executable header.  See [ELF1] 1-4 to 1-8.
+   This appears at the very beginning of an ELF binary. */
+struct Elf32_Ehdr
+  {
+    unsigned char e_ident[16];
+    Elf32_Half    e_type;
+    Elf32_Half    e_machine;
+    Elf32_Word    e_version;
+    Elf32_Addr    e_entry;
+    Elf32_Off     e_phoff;
+    Elf32_Off     e_shoff;
+    Elf32_Word    e_flags;
+    Elf32_Half    e_ehsize;
+    Elf32_Half    e_phentsize;
+    Elf32_Half    e_phnum;
+    Elf32_Half    e_shentsize;
+    Elf32_Half    e_shnum;
+    Elf32_Half    e_shstrndx;
+  };
 
 /* Program header.  See [ELF1] 2-2 to 2-4.
    There are e_phnum of these, starting at file offset e_phoff
@@ -549,160 +608,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   return success;
 }
-
-/* Lazy loads an ELF executable from FILE_NAME into the current thread.
-   Stores the executable's entry point into *EIP
-   and its initial stack pointer into *ESP.
-   Returns true if successful, false otherwise. */
-bool
-lazy_load (const char *file_name, void (**eip) (void), void **esp)
-{
-  struct thread *t = thread_current ();
-  struct Elf32_Ehdr *ehdr = malloc(sizeof(*ehdr));
-  struct file *file = NULL;
-
-  bool success = false;
-
-
-  /* Allocate and activate page directory. */
-  t->pagedir = pagedir_create ();
-  if (t->pagedir == NULL)
-    goto done;
-  process_activate ();
-
-  /* Open executable file. */
-  file = filesys_open (file_name);
-  if (file == NULL)
-    {
-      printf ("load: %s: open failed\n", file_name);
-      goto done;
-    }
-
-  /* Read and verify executable header. */
-  if (file_read (file, ehdr, sizeof *ehdr) != sizeof *ehdr
-      || memcmp (ehdr->e_ident, "\177ELF\1\1\1", 7)
-      || ehdr->e_type != 2
-      || ehdr->e_machine != 3
-      || ehdr->e_version != 1
-      || ehdr->e_phentsize != sizeof (struct Elf32_Phdr)
-      || ehdr->e_phnum > 1024)
-    {
-      printf ("load: %s: error loading executable\n", file_name);
-      goto done;
-    }
-
-
-  if(DEBUG) printf("creating lazy user page\n");
-  create_lazy_user_page(file, ehdr);
-
-  // TODO call load_user_code_and_data() from page_fault -> page_load(vaddr*)
-
-  /* Set up stack. */
-  if (!setup_stack (esp))
-    goto done;
-
-  /* Start address. */
-  *eip = (void (*) (void)) ehdr->e_entry;
-
-  success = true;
-
- done:
-  /* We arrive here whether the load is successful or not. */
-
- /* Close file if something went wrong,
-  * deny writes on the file if everthing's fine. */
-  if(!success)
-	  file_close (file);
-  else {
-	  t->executable = file;
-	  t->esp = *esp;
-	  file_deny_write(file);
-  }
-
-  return success;
-}
-
-bool
-load_user_code_and_data(struct file* file, struct Elf32_Ehdr *ehdr)
-{
-	if(DEBUG) printf("Copy user code and data to stack\n");
-	bool success = false;
-
-	/* Read program headers. */
-	off_t file_ofs = ehdr->e_phoff;
-	int i;
-	for (i = 0; i < ehdr->e_phnum; i++)
-	{
-		if(DEBUG) printf("NEW PROGRAM HEADER\n");
-	  struct Elf32_Phdr phdr;
-
-	  if (file_ofs < 0 || file_ofs > file_length (file))
-		goto done;
-	  file_seek (file, file_ofs);
-
-	  if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
-		goto done;
-	  file_ofs += sizeof phdr;
-	  switch (phdr.p_type)
-		{
-		case PT_NULL:
-		case PT_NOTE:
-		case PT_PHDR:
-		case PT_STACK:
-		default:
-		  /* Ignore this segment. */
-		  break;
-		case PT_DYNAMIC:
-		case PT_INTERP:
-		case PT_SHLIB:
-		  goto done;
-		case PT_LOAD:
-		  if (validate_segment (&phdr, file))
-			{
-			  bool writable = (phdr.p_flags & PF_W) != 0;
-			  uint32_t file_page = phdr.p_offset & ~PGMASK;
-			  uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
-			  uint32_t page_offset = phdr.p_vaddr & PGMASK;
-			  uint32_t read_bytes, zero_bytes;
-			  if (phdr.p_filesz > 0)
-				{
-				  /* Normal segment.
-					 Read initial part from disk and zero the rest. */
-				  read_bytes = page_offset + phdr.p_filesz;
-				  zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)
-								- read_bytes);
-				}
-			  else
-				{
-				  /* Entirely zero.
-					 Don't read anything from disk. */
-				  read_bytes = 0;
-				  zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
-				}
-			  if (!load_segment (file, file_page, (void *) mem_page,
-								 read_bytes, zero_bytes, writable))
-				goto done;
-			}
-		  else
-			goto done;
-		  break;
-		}
-	}
-
-	success = true;
-
-
-done:
-	return success;
-}
-
-
+
 /* load() helpers. */
 
-
-#if !VM
 static bool install_page (void *upage, void *kpage, bool writable);
-#endif
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -772,10 +681,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (ofs % PGSIZE == 0);
 
   file_seek (file, ofs);
-
-	if(DEBUG) printf("Im going to read %u bytes and %u zeroes", read_bytes, zero_bytes);
-
-
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -784,76 +689,31 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* acquire frame lock */
-      lock_acquire(&user_frames_lock);
-
       /* Get a page of memory. */
-      uint8_t *kpage = get_user_page(0x0);
-      if (kpage == NULL){
-        if(DEBUG) printf("kpage null \n");
-	      return false;
-
-      }
+      uint8_t *kpage = palloc_get_page (PAL_USER);
+      if (kpage == NULL)
+        return false;
 
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
-          free_user_page (kpage);
-          if(DEBUG) printf("file read failed.\n");
-	  return false; 
+          palloc_free_page (kpage);
+          return false; 
         }
+      memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-      if(DEBUG && first) printf("writing first block @upage %x |  kpage %x\n", (uint32_t) upage, (uint32_t) kpage );
-
-	memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      /* if this is the first code / data page
-       * we have to update the page table entry
-       * which we already created */
-      if(false /*first*/)
-      {
-
- 	  /* fetch entry */
-    	  uint32_t *pte = get_pte(thread_current()->pagedir, (const void*) upage);
-	
-	  if(DEBUG) printf("pte-old: %x\n", *pte);
-    	  
-	  /* update kernel address and set present bit to 1 */
-
-    	  /* set address */
-    	  //*pte = *pte & PTE_FLAGS;
-    	  //*pte = *pte | ((uint32_t)kpage & PTE_ADDR);
-
-    	  /* set present bit */
-    	  *pte = *pte | PTE_P;
-	
-	  if(DEBUG) printf("pte-new: %x\n", *pte);
-
-    	  /* register frame */
-    	  //register_frame(upage, kpage);
-      }
-      else
-      {
-		  /* Add the page to the process's address space. */
-		  if (!install_user_page (upage, kpage, writable))
-			{
-				if(DEBUG) printf("could not install kpage\n");
-			  free_user_page (kpage);
-			  return false;
-			}
-      }
-
-      /* release frame lock */
-      lock_release(&user_frames_lock);
+      /* Add the page to the process's address space. */
+      if (!install_page (upage, kpage, writable)) 
+        {
+          palloc_free_page (kpage);
+          return false; 
+        }
 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
-
-      first = false;
     }
-  if(DEBUG) printf("successfully loaded segment\n");
   return true;
 }
 
@@ -865,22 +725,15 @@ setup_stack (void **esp)
   uint8_t *kpage;
   bool success = false;
 
-  /* acquire frame lock */
-  lock_acquire(&user_frames_lock);
-
-  kpage = get_user_page (PAL_ZERO);
-  if (kpage != NULL)
+  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  if (kpage != NULL) 
     {
-      success = install_user_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
         *esp = PHYS_BASE;
       else
-    	  free_user_page (kpage);
+        palloc_free_page (kpage);
     }
-
-  /* release frame lock */
-  lock_release(&user_frames_lock);
-
   return success;
 }
 
@@ -893,7 +746,6 @@ setup_stack (void **esp)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-#if !VM
 static bool
 install_page (void *upage, void *kpage, bool writable)
 {
@@ -904,7 +756,6 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
-#endif
 
 /*
  * Find child with id child_id.
