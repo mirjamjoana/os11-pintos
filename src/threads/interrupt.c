@@ -9,7 +9,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "devices/timer.h"
-#include "userprog/exception.h"
 
 /* Programmable Interrupt Controller (PIC) registers.
    A PC has two PICs, called the master and slave PICs, with the
@@ -347,10 +346,6 @@ intr_handler (struct intr_frame *frame)
 {
   bool external;
   intr_handler_func *handler;
-
-  /* Syscall interrupt - save user esp */
-  if((frame->error_code & PF_U) != 0)
-	  thread_current()->esp = frame->esp;
 
   /* External interrupts are special.
      We only handle one at a time (so interrupts must be off)

@@ -25,6 +25,14 @@
    half to the user pool.  That should be huge overkill for the
    kernel pool, but that's just fine for demonstration purposes. */
 
+/* A memory pool. */
+struct pool
+  {
+    struct lock lock;                   /* Mutual exclusion. */
+    struct bitmap *used_map;            /* Bitmap of free pages. */
+    uint8_t *base;                      /* Base of pool. */
+  };
+
 /* Two pools: one for kernel data, one for user pages. */
 static struct pool kernel_pool, user_pool;
 
@@ -172,9 +180,3 @@ page_from_pool (const struct pool *pool, void *page)
 
   return page_no >= start_page && page_no < end_page;
 }
-
-/* returns the user pool */
-struct pool* get_user_pool() {
-	return &user_pool;
-}
-

@@ -16,9 +16,8 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
-#ifdef VM
-#include "vm/page.h"
-#endif
+
+#define DEBUG 0
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -564,9 +563,6 @@ init_thread (struct thread *t, const char *name, int priority)
 
   /* initialize children list */
   list_init (&(t->children));
-  
-  /* initialize mapping list */
-  list_init(&(t->mappings));
 
   list_push_back (&all_list, &t->allelem);
 }

@@ -29,7 +29,18 @@ None.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
-None.
+struct thread:
+	bool is_user_thread - states if thread is a user thread
+	file * executable - file link to the threads code on disk
+	thread * parent	- parent of the thread
+	list children -	child list
+	list file_descriptors - list of open files
+	uint fd_next_id - next fd id 
+	
+struct child - child element saved in the children list, including all information about the child process
+
+struct file_descriptor_elem - file descriptor element for the fd list, includes all information necessary for file handling
+
 
 ---- ALGORITHMS ----
 
@@ -37,18 +48,19 @@ None.
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
 
-We implemented argument parsing by first counting the number of arguments
-and creating tokens for each argument using strtok_r.
-Then we allocate an array of the appropriate size where we save the token
-pointers. This ensures that the first value in the array equals the first 
-element of argv[]. After that, we try to load the file which is given by 
-argv[0]. If the load is successful, we push the arguments in reversed order 
-on the stack, followed by a word align if necessary. Then we push the required 
-sentinel on the stack as well as the argument addresses (argv[i]). Finally, we 
-push the argument count and the return address on the user stack.
+We implemented argument parsing by first counting the number of arguments.
+Then we allocate an array of appropriate size where we put pointers to 
+the parsed strings into it. This ensures that the first value in the array
+equals the first element of argv[]. After that, we try to load the file 
+which is given by argv[0]. If this is successful, we put the arguments
+in reversed order on the stack. Then we push the required sentinels on the 
+stack. Since we stored the addresses of the arguments when we put them on
+the stack, we can now easily put the addresses in reversed order on the stack.
+Finally the remaining values and addresses are pushed on the stack and
+we are done.
 
-If an overflow occurs during stack creation, the thread creation is canceled, 
-and the -1 is returned.
+If an overflow occurs, a page fault exits the current thread. We limit the 
+space accessible with our functions.
 
 ---- RATIONALE ----
 
@@ -78,20 +90,37 @@ the string several times.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
-added to struct thread:
-	bool is_user_thread - states if thread is a user thread
-	file * executable - file link to the threads code on disk
-	thread * parent	- parent of the thread
-	list children -	list of child processes which has been started from this thread
-	list file_descriptors - list of open files
-	uint fd_next_id - next file descriptor id 
-	
-struct child - child element saved in the children list, including all information about the child process necessary for the current thread
+Added to syscall.c:
 
-struct file_descriptor_elem - file descriptor element for the fd list, includes all information necessary for file handling
+	static struct file* syscall_get_file(int file_descriptor);
+
+A filesystem_lock is used to protect the filesystem against unsynchronized 
+access.
+	static struct lock filesystem_lock;					 /* mutex semaphore for filesystem */
 
 
-static struct lock filesystem_lock;		- a mutex semaphore for the filesystem, shared by thread.c, process.c and syscall.c 
+	/* Members for implementing exit() */
+	struct thread *cur_thread = thread_current();				/* get current thread */
+	struct child *list_element = process_get_child(cur_thread->tid);	/* get child element of current thread */
+	struct thread *parent_thread = list_element->parent;			/* get parent thread */
+
+	/* Members for implementing open() */
+    	struct file *file = filesys_open(file_name);				/* open file */
+    	struct list* file_descriptors = &(thread_current()->file_descriptors);	/* fetch file descriptor list */
+	struct file_descriptor_elem *file_descriptor = 
+	(struct file_descriptor_elem *) malloc(sizeof(struct file_descriptor_elem));	/* create new file descriptor for file file */
+
+Added to process.c:
+
+	struct thread* process_get_thread(tid_t tid);
+	struct child* process_get_child(tid_t child_tid);
+
+	*/ Member for implementing process_wait() */
+	struct child* child = process_get_child(child_tid);			/* find thread with id child_tid */
+
+	*/ Member for implementing process_get_child() */
+	struct list* children = &(thread_current()->children);			/* list of child threads */
+
 
 
 >> B2: Describe how file descriptors are associated with open files.
@@ -99,24 +128,19 @@ static struct lock filesystem_lock;		- a mutex semaphore for the filesystem, sha
 >> single process?
 
 Each process keeps track of the files he has opened by managing a file-descriptor
-list. This lists includes file_descriptor_elem elements is a data structure which 
-saves the opened file and the file descriptor id corresponding to it. The file
-descriptor id is unique within a single process.
+list. This is a datastructure which is unique within a single process.
 
 ---- ALGORITHMS ----
 
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
 
-We implemented reading and writing user data according to the first 
-mentioned solution in the assignment description. In the method 
-syscall_get_argument() we check the validity of a pointer by calling
-syscall_get_kernel_address(). If the pointer points to non-user memory 
-or is a null pointer the thread is exited. To check if the well bounded
-address is mapped we use pagedir_get_page(). Again, the thread is exited
-if the region is unmapped. If the look up has been a success, we return 
-the kernel virtual address to syscall_get_argument() which returns the 
-value at the the address.
+To implement reading and writing user data correctly, we chose to implement
+the first solution how it was described in the assignment. In the method
+syscall_get_kernel_address() we check the validity of a pointer that we got
+from a user process. We check whether the pointer points to unmapped or non-user
+memory or is a nullpointer. Finally we used the preimplemented method pagedir_get_page()
+to lookup the user virtual address.
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
@@ -125,24 +149,17 @@ value at the the address.
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
-At least 2 calls. As we expect the user stack not being empty (arguments
-of the process), we have to copy data to 2 pages. Therefore, we have to 
-call get_page() twice, for two different pages.
-
-On the other side, there can be number of byte many page inspections,
-simply by checking the page for every byte saving.
-
-One could improve such a page check by knowing the current space left in a 
-page, or being informed by the page check if there is a need to check again
-as the requested size need another page after x bytes. 
+At least 2 calls - first and last address of the page.
+Maximum: for every word.
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
 
-The system call wait() invokes process_wait() in process.c. To synchronize
-between the caller and the callee, we use a semaphore to let the parent 
-process wait until the child is terminated normally or abnormally. In both cases
-the semaphore is increased to let the parent process continue its execution.
+We implemented the wait system call bei calling process_wait() in process.c.
+We used a semaphore to indicate that a process is waiting on the child process.
+It is increased when the child process exits, whereas the waiting parent process
+waits on the semaphore until being woken up and then decreasing it.  By that we 
+ensure proper synchronization between parent and child processes.
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
@@ -159,20 +176,17 @@ the semaphore is increased to let the parent process continue its execution.
 >> managing these issues.  Give an example.
 
 Let us consider the "write" system call as an example. We first implemented
-a method "handle_write()" which calls the already mentioned method 
-syscall_get_argument(), which fetches the three values at the given address 
-if the validity of the user addresses can be proven. In addition, if an
-argument itself is a pointer, we check this address as well.
-If any of those fail, we exit the program by calling thread_exit(), which 
-includes the printout you wished, and releasing all system locks and resources
-acquired during the life of the process which has not yet been released.
+a method "handle_write()" which calls the method syscall_get_kernel_address()
+(via syscall_get_argument()), which checks the validity of the user address 
+and will then return the three also checked argument pointers/values. If any 
+of those fail, we exit the program by calling thread_exit(), which includes
+the printout you wished, and releasing system locks and resources.
  
-Next, we try to acquire the lock that protects the file system before we fetch 
-the requested file descriptor. If the file descriptor is the console, we put the 
-bytes that should be written into a buffer. If it should be written to a file, we 
-look up the matching file descriptor. If no matching file descriptor could be found, 
-we cancel the write call by returning -1. On success, we return the number of bytes
-written to the file.
+Next, we try to acquire the lock that protects the file system before we 
+allocate memory. If the file descriptor is the console, we put the bytes that 
+should be written into a buffer. If it should be written to a file, we look up 
+the matching file descriptor. If no matching file descriptor could be found, 
+cancel the write call.
  
 ---- SYNCHRONIZATION ----
 
@@ -183,10 +197,7 @@ written to the file.
 
 We implemented a sempaphore waiting. Until the thread started has not
 finished its loading step, the caller is not able to continue. If 
-the load is not succesfull, the caller is informed. This is achieved by
-the child node in the parent list. The child process saves its 
-success / fail information in this node. In that way, the parent is
-always informed about the child status.
+the load is not succesfull, the caller is informed.
 
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
@@ -195,16 +206,11 @@ always informed about the child status.
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
 
-As mentioned above, the child process blocks the parents process via
-a semaphore until its initialized, normally or abnormally. As the child
-node is saved in the parent thread, the node is not removed until the 
-parent process itself is terminating. This ensures as well the case that,
-if C has already exited, the semaphore has been increased and is still
-available. Even if the parent process exits before the child, the child
-can check if the its node is still available in the parent thread, if not
-nothing has to be saved, as no interdependency exists. Each process is 
-therefore only responsible for its own resources, independent it has 
-children or not.
+This is ensured by synchronizing both threads with a semaphore. P waits
+on the semaphore until C exits. This is the moment where P is being 
+signaled to wake up again. If C has already exited, the semaphore is
+free and P can call down() and go on. The resources of C are freed
+in the method process_exit(), which is called by C in every case.
 
 ---- RATIONALE ----
 
@@ -215,16 +221,15 @@ We chose to first check the validity of a user pointer before
 dereferencing it because this makes it easier to handle the release of 
 locks and allocated memory afterwards. As already pointed out in the 
 assignment, you need not to worry about how to return from a page fault. 
-So we chose the easier and more flexible technique.
+So we chose the easier and a bit slower technique.
 
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
 
-We designed file descriptors as property of a thread. The thread uses this
-file descriptor list to manage all open files. An advantage of this design
-is that the kernel can also access the file descriptors list, e.g. if the 
-process has to be killed due to an error. The kernel could then free those 
-resources.
+We designed file descriptors as property of a thread. It uses this struct
+to manage all open files. An advantage of this design is that the kernel
+could also access the file descriptors list, e.g. if the process has to
+be killed due to an error. The kernel could then free those resources.
 
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
@@ -243,20 +248,12 @@ the quarter.
 >> In your opinion, was this assignment, or any one of the three problems
 >> in it, too easy or too hard?  Did it take too long or too little time?
 
-Its a bit long for a two person group. We had to use all remaining slip
-days to come up with a good solution. Maybe a group of 3 would solve 
-this particular problem.
-
 >> Did you find that working on a particular part of the assignment gave
 >> you greater insight into some aspect of OS design?
-
-Everything.
 
 >> Is there some particular fact or hint we should give students in
 >> future quarters to help them solve the problems?  Conversely, did you
 >> find any of our guidance to be misleading?
-
-No.
 
 >> Do you have any suggestions for the TAs to more effectively assist
 >> students, either for future quarters or the remaining projects?
