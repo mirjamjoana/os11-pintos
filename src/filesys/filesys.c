@@ -25,13 +25,12 @@ filesys_init (bool format)
 
 	inode_init();
 	free_map_init();
+	cache_init();
 
 	if (format)
 		do_format();
 
 	free_map_open();
-
-	cache_init();
 }
 
 /* Shuts down the file system module, writing any unwritten data
