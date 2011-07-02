@@ -39,6 +39,9 @@ struct bitmap *cache_table;
 /* global cache lock */
 struct lock cache_globallock;
 
+/* cache eviction pointer */
+static int cep = 0;
+
 /* initializes the cashing system */
 void
 cache_init ()
@@ -110,6 +113,8 @@ cache_add (block_sector_t bid)
 	/* release the lock for the cache table */
 	lock_release(&cache_globallock);
 
+	if(CACHE_DEBUG) printf("added cache block %u for sector %u\n", (unsigned int) free_cache_block, (unsigned int) bid);
+	
 	return free_cache_block;
 }
 
@@ -118,6 +123,8 @@ cache_add (block_sector_t bid)
 static void
 cache_writeback (int idx)
 {
+	if(CACHE_DEBUG) printf("writeback cache block %i\n", idx);
+
 	ASSERT(bitmap_test (cache_table,idx));
 	ASSERT(lock_held_by_current_thread(&cache_globallock));
         
@@ -186,6 +193,9 @@ cache_read (block_sector_t bid, void * buffer, int offset, int size)
 	/* update cache flags */
 	cache[cache_id]->accessed = true;
 	cache[cache_id]->reader--;
+
+	if(CACHE_DEBUG) printf("read sector %u in cache %u\n", (unsigned int) bid, (unsigned int) cache_id);
+
 }
 
 
@@ -193,6 +203,8 @@ cache_read (block_sector_t bid, void * buffer, int offset, int size)
 void
 cache_write (block_sector_t bid, const void *buffer, int offset, int size)
 {
+	if(CACHE_DEBUG) printf("writing cache %u\n", (unsigned int) bid);
+
 	ASSERT(offset < BLOCK_SECTOR_SIZE);
 
 	/* find cache block */
@@ -221,51 +233,44 @@ cache_evict ()
 {
 	ASSERT(lock_held_by_current_thread(&cache_globallock));
 
-	/* loop variables */
-	int i;
-
 	/* as long as no cache block has been evicted */
 	while (true)
 	{
 		/* search cache block to evict */
-    	for ( i = 0; i < CACHE_SIZE; i++ )
-    	{
-    		/* if no one is writing and reading the block */
-            if (cache[i]->writer == 0 && cache[i]->reader == 0)
-            {
-            	/* if cache block is dirty, write back and
-            	 * give it a second chance */
-            	if (cache[i]->dirty)
-            	{
-            		cache_writeback(i);
-            		cache[i]->dirty = false;
-            		cache[i]->accessed = false;
-            	}
-            	/* if cache block was accessed before
-            	 * give it a second chance */
-            	else if (cache[i]->accessed)
-            	{
-            		cache[i]->accessed = false;
-                }
-            	/* if cache block was not accessed nor
-            	 * written in the last clock turn
-            	 * evict it */
-            	else
-                {
-					bitmap_set (cache_table, i, false);
-					/* zero block first? */
-					return;
-                }
-			}
+		/* if no one is writing and reading the block */
+		if (cache[cep]->writer == 0 && cache[cep]->reader == 0)
+		{
+	            	/* if cache block was accessed before
+	            	 * give it a second chance */
+	            	if (cache[cep]->accessed)
+	            	{
+	            		cache[cep]->accessed = false;
+        	        }
+            		/* if cache block was not accessed nor
+	            	 * written in the last clock turn
+	            	 * evict it */
+        	    	else
+	                {
+				if(CACHE_DEBUG) printf("evicting cache block %u\n", (unsigned int) cep);
+
+				cache_writeback(cep);
+				bitmap_set (cache_table, cep, false);
+				/* zero block first? */
+				return;
+	                }
 		}
+		cep = (cep + 1) % CACHE_SIZE;
 	}
 }
+
 
 
 /* flush the cash - write back all dirty blocks */
 void
 cache_flush()
 {
+	if(CACHE_DEBUG) printf("flushing cache\n");
+
 	lock_acquire(&cache_globallock);
         
 	int i;
@@ -280,6 +285,8 @@ cache_flush()
 void
 cache_add_readahead_block(block_sector_t next)
 {
+	if(CACHE_DEBUG) printf("insert read-ahead block\n");
+
 	lock_acquire(&lock_readahead);
 
 	/* create read-ahead element */

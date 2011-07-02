@@ -8,6 +8,8 @@
 #include "threads/synch.h"
 #include <stdio.h>
 
+#define CACHE_DEBUG 0
+
 #define CACHE_READ 0
 #define CACHE_WRITE 1
 #define CACHE_SIZE 64
