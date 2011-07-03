@@ -123,7 +123,7 @@ cache_add (block_sector_t bid)
 static void
 cache_writeback (int idx)
 {
-	if(CACHE_DEBUG) printf("writeback cache block %i\n", idx);
+	if(CACHE_DEBUG) printf("writeback cache block %i to disk block %i\n", idx, (int) cache[idx]->bid);
 
 	ASSERT(bitmap_test (cache_table,idx));
 	ASSERT(lock_held_by_current_thread(&cache_globallock));
@@ -194,7 +194,7 @@ cache_read (block_sector_t bid, void * buffer, int offset, int size)
 	cache[cache_id]->accessed = true;
 	cache[cache_id]->reader--;
 
-	if(CACHE_DEBUG) printf("read sector %u in cache %u\n", (unsigned int) bid, (unsigned int) cache_id);
+	if(CACHE_DEBUG && false) printf("read cache %u\n", (unsigned int) cache_id);
 
 }
 
@@ -203,8 +203,6 @@ cache_read (block_sector_t bid, void * buffer, int offset, int size)
 void
 cache_write (block_sector_t bid, const void *buffer, int offset, int size)
 {
-	if(CACHE_DEBUG) printf("writing cache %u\n", (unsigned int) bid);
-
 	ASSERT(offset < BLOCK_SECTOR_SIZE);
 	ASSERT(offset + size <= BLOCK_SECTOR_SIZE);
 
@@ -225,6 +223,8 @@ cache_write (block_sector_t bid, const void *buffer, int offset, int size)
 	cache[cache_id]->dirty = true;
 
 	cache[cache_id]->writer--;
+	
+	if(CACHE_DEBUG) printf("wrote cache %u: @offset %i from buffer %x with size %i\n", (unsigned int) cache_id, offset, (unsigned int) buffer, size);
 }
 
 
@@ -252,7 +252,7 @@ cache_evict ()
 	            	 * evict it */
         	    	else
 	                {
-				if(CACHE_DEBUG) printf("evicting cache block %u\n", (unsigned int) cep);
+				if(CACHE_DEBUG) printf("evicted cache block %u\n", (unsigned int) cep);
 
 				cache_writeback(cep);
 				bitmap_set (cache_table, cep, false);
