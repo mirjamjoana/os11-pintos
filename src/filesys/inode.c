@@ -298,7 +298,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
         break;
 
       /* write chunk to cache */
-      cache_write(sector_idx, buffer, sector_ofs, chunk_size);
+      cache_write(sector_idx, buffer + bytes_written, sector_ofs, chunk_size);
 
       /* Advance. */
       size -= chunk_size;

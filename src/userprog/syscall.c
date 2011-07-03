@@ -15,7 +15,7 @@
 
 #define CONSOLE_BUFFER_SIZE 100
 #define MAX_OPEN_FILES 128
-#define DEBUG 0 
+#define DEBUG_SYSCALL 0 
 #define DEBUG_PUTBUF 0
 
 /* prototypes */
@@ -62,7 +62,7 @@ extern struct lock filesystem_lock; /* mutex semaphore for filesystem */
 void
 syscall_init (void) 
 {
-	if(DEBUG) printf("Register syscall handler.\n");
+	if(DEBUG_SYSCALL) printf("Register syscall handler.\n");
 	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -145,14 +145,14 @@ syscall_handler (struct intr_frame *f)
 static void
 handle_halt(struct intr_frame *f UNUSED)
 {
-	if(DEBUG) printf("halt\n");
+	if(DEBUG_SYSCALL) printf("halt\n");
 	halt();
 }
 
 static void
 handle_exit(struct intr_frame *f)
 {
-	if(DEBUG) printf("exit\n");
+	if(DEBUG_SYSCALL) printf("exit\n");
 
 	int status = (int) syscall_get_argument(f, 0); /* exit status */
 
@@ -163,7 +163,7 @@ handle_exit(struct intr_frame *f)
 static void
 handle_exec(struct intr_frame *f)
 {
-	if(DEBUG) printf("exec\n");
+	if(DEBUG_SYSCALL) printf("exec\n");
 
 	char* cmd_line = (char *) syscall_get_argument(f, 0); /* command line input */
 
@@ -180,7 +180,7 @@ handle_exec(struct intr_frame *f)
 static void
 handle_wait(struct intr_frame *f)
 {
-	if(DEBUG) printf("wait\n");
+	if(DEBUG_SYSCALL) printf("wait\n");
 
 	int pid = (int) syscall_get_argument(f, 0); /* process id */
 
@@ -197,7 +197,7 @@ handle_create(struct intr_frame *f UNUSED)
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
 
-	if(DEBUG) printf("create\n");
+	if(DEBUG_SYSCALL) printf("create\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
 	syscall_check_pointer((const void *) file);	/* check the file */
@@ -221,7 +221,7 @@ handle_remove(struct intr_frame *f)
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
 
-	if(DEBUG) printf("remove\n");
+	if(DEBUG_SYSCALL) printf("remove\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
 	syscall_check_pointer((const void *)file);	/* check the file */
@@ -242,7 +242,7 @@ handle_open(struct intr_frame *f)
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
 
-	if(DEBUG) printf("open\n");
+	if(DEBUG_SYSCALL) printf("open\n");
 
 	const char* file = (const char*) syscall_get_argument(f, 0); /* filename */
 	syscall_check_pointer((const void *) file);	/* check the file */
@@ -263,7 +263,7 @@ handle_filesize(struct intr_frame *f)
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
 
-	if(DEBUG) printf("filesize\n");
+	if(DEBUG_SYSCALL) printf("filesize\n");
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 
@@ -284,7 +284,7 @@ handle_read(struct intr_frame *f)
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
 
-	if(DEBUG) printf("read\n");
+	if(DEBUG_SYSCALL) printf("read\n");
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	
@@ -316,7 +316,7 @@ handle_write(struct intr_frame *f)
 
 	unsigned size = (unsigned int) syscall_get_argument(f, 2); /* target buffer size */
 
-	if(DEBUG) printf("Write: fd: %i  buffer: %x  size: %i\n", fd, (uint32_t) buffer, size);
+	if(DEBUG_SYSCALL && fd > 1) printf("Write: fd: %i  buffer: %x  size: %i\n", fd, (uint32_t) buffer, size);
 
 	/* write buffer of size size into file fd */
 	int write_count = write(fd, buffer, size);
@@ -334,7 +334,7 @@ handle_seek(struct intr_frame *f)
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
 
-	if(DEBUG) printf("seek\n");
+	if(DEBUG_SYSCALL) printf("seek\n");
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	unsigned position = (unsigned int) syscall_get_argument(f, 1); /* file position */
@@ -352,7 +352,7 @@ handle_tell(struct intr_frame *f)
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
 
-	if(DEBUG) printf("tell\n");
+	if(DEBUG_SYSCALL) printf("tell\n");
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 
@@ -372,7 +372,7 @@ handle_close(struct intr_frame *f UNUSED)
 	/* acquire file system lock */
 	lock_acquire(&filesystem_lock);
 
-	if(DEBUG) printf("close\n");
+	if(DEBUG_SYSCALL) printf("close\n");
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 
@@ -387,7 +387,7 @@ static void
 handle_no_such_syscall(struct intr_frame *f UNUSED)
 {
 	unsigned int syscall_number = *( (unsigned int*) f->esp);
-	if(DEBUG) printf("No such system call: %i.\n", syscall_number);
+	if(DEBUG_SYSCALL) printf("No such system call: %i.\n", syscall_number);
 	thread_current()->exit_status = -1;
 	thread_exit();
 }
@@ -660,15 +660,14 @@ write (int fd, const void *buffer, unsigned size)
 			/* if matching file descriptor has been found */
 			if(f != NULL)
 			{
-				if(DEBUG) printf("writing to user fd %i\n", fd);
 				/* write buffer to file */
 				writing_count += file_write(f, buffer, size);
 
-				if(DEBUG) printf("%i bytes have been written\n", writing_count);
+				if(DEBUG_SYSCALL) printf("%i bytes have been written\n", writing_count);
 			}
 			else {
 				/* no fitting file desciptor found, panic! */
-				if(DEBUG) printf("No such file descriptor: %i\n", fd);
+				if(DEBUG_SYSCALL) printf("No such file descriptor: %i\n", fd);
 				return -1;
 			}
 		}
@@ -718,7 +717,7 @@ tell (int fd)
 void
 close (int fd)
 {
-	if(DEBUG) printf("try to close file %i\n", fd);
+	if(DEBUG_SYSCALL) printf("try to close file %i\n", fd);
 
 	/* get threads file descriptors */
 	struct list* file_descriptors = &(thread_current()->file_descriptors);
@@ -736,7 +735,7 @@ close (int fd)
 		/* if matching element has been found  */
 		if (fde->file_descriptor == fd)
 		{
-			if(DEBUG) printf("file %i found. closing.\n", fd);
+			if(DEBUG_SYSCALL) printf("file %i found. closing.\n", fd);
 			/* close and delete file object */
 			file_close(fde->file);
 
@@ -749,7 +748,7 @@ close (int fd)
 			return;
 		}
 	}
-	if(DEBUG) printf("file %i not found!\n", fd);
+	if(DEBUG_SYSCALL) printf("file %i not found!\n", fd);
 }
 
 
@@ -798,7 +797,7 @@ syscall_get_kernel_address (const void *uaddr)
 	/* Checks whether UADDR is a nullpointer */
 	if (pd == NULL || uaddr == NULL)
 	{
-		if(DEBUG) printf("Null pointer.\n");
+		if(DEBUG_SYSCALL) printf("Null pointer.\n");
 		current_thread->exit_status = -1;
 		thread_exit();
 	}
@@ -806,7 +805,7 @@ syscall_get_kernel_address (const void *uaddr)
 	/* Checks whether UADDR points to unmapped memory and whether it is a user address */
 	else if ( uaddr < (void *) 0x08048000 /* - 64 * 1024 * 1024 */ || uaddr >= PHYS_BASE)
 	{
-		if(DEBUG) printf("Segmentation fault @ %x\n", (uint32_t) uaddr);
+		if(DEBUG_SYSCALL) printf("Segmentation fault @ %x\n", (uint32_t) uaddr);
 		current_thread->exit_status = -1;
 		thread_exit();
 	}
