@@ -206,6 +206,7 @@ cache_write (block_sector_t bid, const void *buffer, int offset, int size)
 	if(CACHE_DEBUG) printf("writing cache %u\n", (unsigned int) bid);
 
 	ASSERT(offset < BLOCK_SECTOR_SIZE);
+	ASSERT(offset + size <= BLOCK_SECTOR_SIZE);
 
 	/* find cache block */
 	int cache_id = cache_find_block(bid, CACHE_WRITE);
