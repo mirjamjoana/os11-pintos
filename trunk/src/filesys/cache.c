@@ -74,8 +74,10 @@ cache_init ()
 	/*create a bitmap that represents the free entries in the cache table */
 	cache_table = bitmap_create (CACHE_SIZE);
 
-	/* init lock */
+	/* init list, lock and counting semaphore */
 	lock_init(&cache_globallock);
+	list_init(&readahead_list);
+	sema_init(&readahead_cnt, 0);
 }
 
 
@@ -284,23 +286,23 @@ cache_flush()
 
 /* adds block next of the file to the read-ahead list  */
 void
-cache_add_readahead_block(block_sector_t next)
+cache_add_readahead_block(block_sector_t block_sector)
 {
 	if(CACHE_DEBUG) printf("insert read-ahead block\n");
 
-	lock_acquire(&lock_readahead);
+	lock_acquire(&readahead_lock);
 
-	/* create read-ahead element */
-	struct readahead * r = (struct readahead *) malloc ( sizeof(struct readahead));
-	r->bid = next;
+	/* create and initialize read-ahead element */
+	struct readahead_elem *re = (struct readahead_elem *) malloc ( sizeof(struct readahead_elem));
+	re->block_sector = block_sector;
 
 	/* add to read-ahead list */
-	list_push_back (&list_readahead, &r->elem);
+	list_push_back (&readahead_list, &re->elem);
 
-	/* signal wake up to thread */
-	cond_signal(&cond_readahead,&lock_readahead);
+	/* increase list counter and wake read-ahead thread */
+	sema_up(&readahead_cnt);
 
-	lock_release(&lock_readahead);
+	lock_release(&readahead_lock);
 }
 
 
