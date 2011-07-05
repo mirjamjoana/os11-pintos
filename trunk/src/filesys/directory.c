@@ -6,6 +6,8 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
+#define DIR_DEBUG 0
+
 /* A directory. */
 struct dir 
   {
@@ -24,9 +26,10 @@ struct dir_entry
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
-dir_create (block_sector_t sector)
+dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  return inode_create (sector, 0, DIRECTORY);
+	if(DIR_DEBUG) printf("DIR: creating dir @ sector %u with NO entries\n", sector /*, entry_cnt*/);
+  return inode_create (sector,/* entry_cnt * sizeof(struct dir_entry),*/ 0, DIRECTORY);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -34,6 +37,8 @@ dir_create (block_sector_t sector)
 struct dir *
 dir_open (struct inode *inode) 
 {
+	if(DIR_DEBUG) printf("DIR: opening dir @ sector NA\n");
+
   struct dir *dir = calloc (1, sizeof *dir);
   if (inode != NULL && dir != NULL)
     {
@@ -54,6 +59,7 @@ dir_open (struct inode *inode)
 struct dir *
 dir_open_root (void)
 {
+	if(DIR_DEBUG) printf("DIR: opening root dir @ sector %u\n", ROOT_DIR_SECTOR);
   return dir_open (inode_open (ROOT_DIR_SECTOR));
 }
 
@@ -69,6 +75,7 @@ dir_reopen (struct dir *dir)
 void
 dir_close (struct dir *dir) 
 {
+	if(DIR_DEBUG) printf("DIR: closing dir\n");
   if (dir != NULL)
     {
       inode_close (dir->inode);
@@ -92,6 +99,9 @@ static bool
 lookup (const struct dir *dir, const char *name,
         struct dir_entry *ep, off_t *ofsp) 
 {
+	if(DIR_DEBUG) printf("DIR: looking up file %s in dir ... \n", name);
+
+
   struct dir_entry e;
   size_t ofs;
   
@@ -106,8 +116,12 @@ lookup (const struct dir *dir, const char *name,
           *ep = e;
         if (ofsp != NULL)
           *ofsp = ofs;
+	
+	if(DIR_DEBUG) printf("DIR: file %s found.\n", name);
         return true;
       }
+  
+  if(DIR_DEBUG) printf("DIR: file %s NOT found.\n", name);
   return false;
 }
 
@@ -141,6 +155,7 @@ dir_lookup (const struct dir *dir, const char *name,
 bool
 dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
 {
+	if(DIR_DEBUG) printf("DIR: adding file %s @ sector %u to dir \n", name, inode_sector);
   struct dir_entry e;
   off_t ofs;
   bool success = false;
@@ -152,10 +167,13 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   if (*name == '\0' || strlen (name) > NAME_MAX)
     return false;
 
+
   /* Check that NAME is not in use. */
   if (lookup (dir, name, NULL, NULL))
     goto done;
 
+ if(DIR_DEBUG) printf("DIR: searching a free slot\n");
+ 
   /* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
      current end-of-file.
@@ -168,6 +186,8 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
     if (!e.in_use)
       break;
 
+  if(DIR_DEBUG) printf("DIR: write to free slot\n");
+
   /* Write slot. */
   e.in_use = true;
   strlcpy (e.name, name, sizeof e.name);
@@ -175,6 +195,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
 
  done:
+  if(DIR_DEBUG) printf("DIR: creating %s successfull.\n", success ? " " : "not");
   return success;
 }
 
@@ -184,6 +205,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
 bool
 dir_remove (struct dir *dir, const char *name) 
 {
+	if(DIR_DEBUG) printf("DIR: removing dir\n");
   struct dir_entry e;
   struct inode *inode = NULL;
   bool success = false;
@@ -221,6 +243,7 @@ dir_remove (struct dir *dir, const char *name)
 bool
 dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 {
+	if(DIR_DEBUG) printf("DIR: reading dir\n");
   struct dir_entry e;
 
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
