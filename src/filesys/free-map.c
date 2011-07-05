@@ -4,6 +4,9 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
+#include <stdio.h>
+
+#define FREEMAP_DEBUG 0
 
 static struct file *free_map_file;   /* Free map file. */
 static struct bitmap *free_map;      /* Free map, one bit per sector. */
@@ -12,6 +15,7 @@ static struct bitmap *free_map;      /* Free map, one bit per sector. */
 void
 free_map_init (void) 
 {
+	if(FREEMAP_DEBUG) printf("init free map");
   free_map = bitmap_create (block_size (fs_device));
   if (free_map == NULL)
     PANIC ("bitmap creation failed--file system device is too large");
@@ -52,6 +56,7 @@ free_map_release (block_sector_t sector, size_t cnt)
 void
 free_map_open (void) 
 {
+	if(FREEMAP_DEBUG) printf("open free map\n");
   free_map_file = file_open (inode_open (FREE_MAP_SECTOR));
   if (free_map_file == NULL)
     PANIC ("can't open free map");
@@ -63,6 +68,7 @@ free_map_open (void)
 void
 free_map_close (void) 
 {
+	if(FREEMAP_DEBUG) printf("close free map\n");
   file_close (free_map_file);
 }
 
@@ -71,14 +77,23 @@ free_map_close (void)
 void
 free_map_create (void) 
 {
+	if(FREEMAP_DEBUG) printf("\ncreating free map\n");
   /* Create inode. */
   if (!inode_create (FREE_MAP_SECTOR, bitmap_file_size (free_map), FILE))
     PANIC ("free map creation failed");
+
+  if(FREEMAP_DEBUG) printf("open free map\n");
 
   /* Write bitmap to file. */
   free_map_file = file_open (inode_open (FREE_MAP_SECTOR));
   if (free_map_file == NULL)
     PANIC ("can't open free map");
+
+  if(FREEMAP_DEBUG) printf("writing free map\n");
+
   if (!bitmap_write (free_map, free_map_file))
     PANIC ("can't write free map");
+  
+  if(FREEMAP_DEBUG) printf("finished creating free map\n");
+
 }

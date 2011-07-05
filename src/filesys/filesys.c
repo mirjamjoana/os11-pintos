@@ -8,6 +8,8 @@
 #include "filesys/directory.h"
 #include "filesys/cache.h"
 
+#define DEBUG_FILESYS 0
+
 /* Partition that contains the file system. */
 struct block *fs_device;
 
@@ -49,12 +51,19 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size) 
 {
+	if(DEBUG_FILESYS) printf("FILESYS: creating file %s with initial size %i\n", name, initial_size);
   block_sector_t inode_sector = 0;
   struct dir *dir = dir_open_root ();
-  bool success = (dir != NULL
-                  && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size, FILE)
-                  && dir_add (dir, name, inode_sector));
+  
+  bool suc_dir = dir != NULL;
+  bool suc_fm = free_map_allocate (1, &inode_sector);
+  bool suc_ic = inode_create (inode_sector, initial_size, FILE);
+  bool suc_da = dir_add (dir, name, inode_sector);
+
+  bool success = suc_dir && suc_fm && suc_ic && suc_da;
+  
+  if(DEBUG_FILESYS && !success) printf("FILESYS: creating file not successfull: dir!=NULL:%u | free-map:%u | inode-create:%u | dir-add:%u\n", (unsigned) suc_dir, (unsigned) suc_fm, (unsigned) suc_ic, (unsigned) suc_da);
+
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
   dir_close (dir);
@@ -70,6 +79,7 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
+	if(DEBUG_FILESYS) printf("FILESYS: opening %s\n", name);
   struct dir *dir = dir_open_root ();
   struct inode *inode = NULL;
 
@@ -101,7 +111,7 @@ do_format (void)
   printf ("Formatting file system...");
   free_map_create ();
 
-  if (!dir_create (ROOT_DIR_SECTOR))
+  if (!dir_create (ROOT_DIR_SECTOR, 16))
     PANIC ("root directory creation failed");
   free_map_close ();
   printf ("done.\n");
