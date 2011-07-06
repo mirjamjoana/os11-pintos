@@ -87,19 +87,25 @@ cache_add (block_sector_t bid)
 {
 	/* lock the cache */
 	lock_acquire(&cache_globallock);
+	
+	//bool hellYeah = bid == (unsigned) 163;
 
 	/* lock for a free_cache_block cache block */
 	size_t free_cache_block = bitmap_scan (cache_table, 0, 1, false);
+	
+	//if(DEBUG || hellYeah) printf("bitscan complete bla\n");
 
 	/* if no free cache block is found, evict one and
 	 * search again */
 	if (free_cache_block == BITMAP_ERROR) {
+		
+		//if(DEBUG || hellYeah) printf("evict some\n");
 		cache_evict();
 		free_cache_block = bitmap_scan (cache_table, 0, 1, false);
 	}
 
 	ASSERT(free_cache_block != BITMAP_ERROR);
-	if(DEBUG) printf("add cache block %d\n",bid);
+	//if(DEBUG || hellYeah) printf("add cache block %d\n",bid);
 
 	/* copy block to cache */
 	block_read (fs_device, bid, cache[free_cache_block]->kpage);
@@ -158,7 +164,7 @@ cache_find_block (block_sector_t bid, int read_write)
 			if ( read_write == CACHE_WRITE ) cache[i]->writer++;
 
 			lock_release(&cache_globallock);                        
-            return i;
+            		return i;
 		}       
 	}
 
@@ -183,6 +189,7 @@ cache_read (block_sector_t bid, void * buffer, int offset, int size)
 		cache_id = cache_add(bid);
 		ASSERT(cache_id != -1);
 
+		/* increment number of reader manually */
 		cache[cache_id]->reader++;
 
 		/* add read-ahead block */
@@ -196,7 +203,7 @@ cache_read (block_sector_t bid, void * buffer, int offset, int size)
 	cache[cache_id]->accessed = true;
 	cache[cache_id]->reader--;
 
-	if(CACHE_DEBUG && false) printf("read cache %u\n", (unsigned int) cache_id);
+	if(CACHE_DEBUG)  printf("read cache %u\n", (unsigned int) cache_id);
 
 }
 
@@ -211,21 +218,27 @@ cache_write (block_sector_t bid, const void *buffer, int offset, int size)
 	/* find cache block */
 	int cache_id = cache_find_block(bid, CACHE_WRITE);
         
+	//if(((unsigned) buffer) == 134556864) printf("CACHE a, bid:%u\n", bid);
+
 	/* if cache block not present, load */
 	if(cache_id == -1)
+	{
 		cache_id = cache_add(bid);
-
+		
+		/* increment number of reader manually */
+		cache[cache_id]->writer++;
+	}
+	
+	//if(((unsigned) buffer) == 134556864) printf("CACHE b\n");
+	
 	ASSERT(cache_id != -1);
-
-	cache[cache_id]->writer++;
 
 	/* copy buffer content into cache */
 	memcpy (cache[cache_id]->kpage + offset, buffer, size);
 	cache[cache_id]->accessed = true;
 	cache[cache_id]->dirty = true;
-
 	cache[cache_id]->writer--;
-	
+
 	if(CACHE_DEBUG) printf("wrote cache %u: @offset %i from buffer %x with size %i\n", (unsigned int) cache_id, offset, (unsigned int) buffer, size);
 }
 
@@ -236,9 +249,17 @@ cache_evict ()
 {
 	ASSERT(lock_held_by_current_thread(&cache_globallock));
 
+	//unsigned loops = 0;
+
 	/* as long as no cache block has been evicted */
 	while (true)
 	{
+		/*
+		if(loops > 3 * CACHE_SIZE) {
+			printf("Cache block %u | writer: %u | reader: %u\n", cep, cache[cep]->writer, cache[cep]->reader);
+		}
+		*/
+
 		/* search cache block to evict */
 		/* if no one is writing and reading the block */
 		if (cache[cep]->writer == 0 && cache[cep]->reader == 0)
@@ -263,6 +284,7 @@ cache_evict ()
 	                }
 		}
 		cep = (cep + 1) % CACHE_SIZE;
+		//loops++;
 	}
 }
 
