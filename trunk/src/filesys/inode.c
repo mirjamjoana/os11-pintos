@@ -707,23 +707,12 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 		length += offset + size;
 	}
 
-/*	
-	bool findSomething = false;
-	if(offset == 29241) {
-		findSomething = true;
-		printf("START findSomething DEBUG MODE\n");
-	}
-*/
 	/* write to file */
 	while (size > 0)
 	{
-		//if(findSomething) printf("LOOP\n");
-	
 		/* Sector to write, starting byte offset within sector. */
 		block_sector_t sector_idx = byte_to_sector (inode, offset);
 		int sector_ofs = offset % BLOCK_SECTOR_SIZE;
-
-		//if(findSomething) printf("a\n");
 		
 		/* Bytes left in inode, bytes left in sector, lesser of the two. */
 		off_t inode_left = length - offset;
@@ -735,9 +724,6 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 		if (chunk_size <= 0)
 			break;
 
-		//if(findSomething) printf("chunk size: %i\n", chunk_size);
-		//if(findSomething) printf("cache_write(sector %u, buffer %u, sector offset %i, chunk size %i\n", sector_idx, (unsigned) buffer + bytes_written, sector_ofs, chunk_size);
-		
 		/* write chunk to cache */
 		cache_write(sector_idx, buffer + bytes_written, sector_ofs, chunk_size);
 	
@@ -746,8 +732,6 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 		offset += chunk_size;
 		bytes_written += chunk_size;
     }
-
-	//if(findSomething) printf("Bytes written: %u\n", bytes_written);
 
 	return bytes_written;
 }

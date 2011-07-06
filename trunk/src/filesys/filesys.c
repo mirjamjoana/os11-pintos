@@ -66,8 +66,9 @@ filesys_get_file (const char *name)
 
 	if(DEBUG_FILESYS) printf("FILESYS: dir path: {%s} dir name: {%s}\n", path, file);
 	if(DEBUG_FILESYS) printf("FILESYS: thread {%s} working dir: {%u}\n",thread_current()->name, thread_current()->working_dir->inode->sector);
+
 	/* fetch target dir */
-	struct dir *target_dir = path == NULL ? thread_current()->working_dir : dir_getdir(path);
+	struct dir *target_dir = path == NULL ? dir_reopen(thread_current()->working_dir) : dir_getdir(path);
 
 	if(DEBUG_FILESYS) printf("FILESYS: dir = %u\n", target_dir->inode->sector);
 
@@ -194,7 +195,7 @@ filesys_remove (const char *name)
 		}
 		else {
 			/* check if directory is empty */
-			bool success = dir != NULL && dir_isempty (dir, name);
+			bool success = dir != NULL && dir_isempty (dir/*, name*/);
 			if (!success) {
 				dir_close(dir);
 				return false;
