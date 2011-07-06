@@ -43,13 +43,13 @@ filesys_done (void)
 	cache_flush();
 	free_map_close ();
 }
-
+
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
 bool
-filesys_create (const char *name, off_t initial_size) 
+filesys_create (const char *name, off_t initial_size, enum file_t type) 
 {
 	if(DEBUG_FILESYS) printf("FILESYS: creating file %s with initial size %i\n", name, initial_size);
   block_sector_t inode_sector = 0;

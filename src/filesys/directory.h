@@ -25,7 +25,7 @@ struct inode *dir_get_inode (struct dir *);
 bool dir_lookup (const struct dir *, const char *name, struct inode **);
 bool dir_add (struct dir *, const char *name, block_sector_t);
 bool dir_remove (struct dir *, const char *name);
-bool dir_readdir (struct dir *, char name[NAME_MAX + 1]);
+bool dir_readdir (struct dir *, const char name[NAME_MAX + 1]);
 
 /* Utilities. */
 bool dir_get_path_and_name (const char * dir_path, char* path, char* name);

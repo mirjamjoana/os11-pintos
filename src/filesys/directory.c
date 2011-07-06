@@ -259,7 +259,7 @@ dir_remove (struct dir *dir, const char *name)
    NAME.  Returns true if successful, false if the directory
    contains no more entries. */
 bool
-dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
+dir_readdir (struct dir *dir, const char name[NAME_MAX + 1])
 {
 	if(DIR_DEBUG) printf("DIR: reading dir\n");
   struct dir_entry e;
