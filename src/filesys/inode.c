@@ -604,6 +604,8 @@ inode_close (struct inode *inode)
 	/* Release resources if this was the last opener. */
 	if (--inode->open_cnt == 0)
 	{
+		lock_acquire(&inode->lock);
+
 		/* Remove from inode list and release lock. */
 		list_remove (&inode->elem);
 
@@ -618,6 +620,8 @@ inode_close (struct inode *inode)
 			/* release inode */
 			free_map_release (inode->sector, 1);
 		}
+
+		lock_release(&inode->lock);
 
 		free (inode);
 	}
