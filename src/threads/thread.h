@@ -140,6 +140,7 @@ struct file_descriptor_elem
     struct list_elem elem;				/* list dummy */
     int file_descriptor;				/* file handler number */
     struct file *file; 					/* file link */
+    bool is_directory;					/* directory or file */
   };
 
 /* If false (default), use round-robin scheduler.

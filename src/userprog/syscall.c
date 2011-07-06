@@ -68,7 +68,7 @@ unsigned tell (int fd);
 void close (int fd);
 bool chdir(const char *dir);
 bool mkdir (const char *dir);
-bool readdir (int fd, const char *name);
+bool readdir (int fd, char *name);
 bool isdir (int fd);
 int inumber (int fd);
 
@@ -465,16 +465,16 @@ handle_mkdir(struct intr_frame *f) {
 
 static void 
 handle_readdir(struct intr_frame *f) {
-	/* TODO */
+
 	/* acquire file system lock */
 	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 	
 	if(DEBUG_SYSCALL) printf("readdir\n");
 	
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
-	const char* name = (const char*)  syscall_get_argument(f, 1); /* file name */
+	char* name = (char*) syscall_get_argument(f, 1); /* file name */
 
-	syscall_check_pointer((const void *) name);	/* check the file */
+	/* file name pointer is checked in readdir()! */
 
 	/* read directory and save success */
 	bool success = readdir(fd, name);
@@ -489,7 +489,7 @@ handle_readdir(struct intr_frame *f) {
 
 static void 
 handle_isdir(struct intr_frame *f) {
-	/* TODO */
+
 	if(DEBUG_SYSCALL) printf("isdir\n");
 	
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
@@ -503,7 +503,7 @@ handle_isdir(struct intr_frame *f) {
 
 static void 
 handle_inumber(struct intr_frame *f) {
-	/* TODO */
+
 	if(DEBUG_SYSCALL) printf("inumber\n");
 	
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
@@ -682,6 +682,9 @@ open (const char *file_name)
     	/* set file in file descriptor */
     	file_descriptor->file = file;
 
+        /* check if file is directory */
+        file_descriptor->is_directory = inode_get_filetype(file->inode) == DIRECTORY;
+
     	/* insert new file descriptor into descriptor list */
 		list_push_front(file_descriptors, &file_descriptor->elem);
 
@@ -831,7 +834,8 @@ seek (int fd, unsigned position)
 }
 
 /*
- * Returns the position of the next byte to be read or written in open file fd, expressed in bytes from the beginning of the file.
+ * Returns the position of the next byte to be read or written in open file fd,
+ * expressed in bytes from the beginning of the file.
  */
 unsigned
 tell (int fd)
@@ -844,7 +848,9 @@ tell (int fd)
 }
 
 /*
- * Closes file descriptor fd. Exiting or terminating a process implicitly closes all its open file descriptors, as if by calling this function for each one.
+ * Closes file descriptor fd. Exiting or terminating a process implicitly
+ * closes all its open file descriptors, as if by calling this function for
+ * each one.
  */
 void
 close (int fd)
@@ -987,7 +993,9 @@ syscall_get_file(int file_descriptor)
 /* Changes the current working directory of the process to dir, 
  which may be relative or absolute. Returns true if successful, false on failure. */
 bool
-chdir (const char *dir UNUSED) {
+chdir (const char *dir) {
+
+	/* TODO komplett falsch */
 
     /* if empty or root return false */
     if(strlen(dir) ==  0 || strcmp( dir, "/")) return false;
@@ -1022,43 +1030,9 @@ chdir (const char *dir UNUSED) {
  That is, mkdir("/a/b/c") succeeds only if "/a/b" already exists and 
  "/a/b/c" does not.  */
 bool 
-mkdir (const char *dir) {
-
-	bool success = false;
-	char *path = NULL;
-	char *dir_name = NULL;
-
-	/* split up path in new dir name and path to new dir */
-	if(dir_get_path_and_name(dir, path, dir_name))
-	{
-		/* fetch parent directory */
-		struct dir *parent = dir_getdir(path);
-		struct inode *parent_inode = dir_get_inode(parent);
-
-		/* if parent exists and name is ok */
-		if(dir != NULL)
-		{
-			/* allocate disk sector */
-			block_sector_t dir_sector;
-			ASSERT(free_map_allocate(1, &dir_sector));
-
-			/* create dir */
-			ASSERT(dir_create(dir_sector, parent_inode->sector));
-
-			/* save new dir to parent dir */
-			dir_add(parent, dir_name, dir_sector);
-
-			success = true;
-
-			dir_close(parent);
-		}
-
-		free(parent);
-		free(path);
-		free(dir_name);
-	}
-
-	return success;
+mkdir (const char *dir)
+{
+	return filesys_create(dir, 0, DIRECTORY);
 }
 
 /* Reads a directory entry from file descriptor fd, which must represent 
@@ -1066,32 +1040,32 @@ mkdir (const char *dir) {
  which must have room for READDIR_MAX_LEN + 1 bytes, and returns true. 
  If no entries are left in the directory, returns false.  */
 bool 
-readdir (int fd, const char *name) {
-	
+readdir (int fd, char *name)
+{
 	/* check if it is a directory */
 	if (!isdir(fd)) {
 		return false;
 	}
 	
-	/* find the file and check if it corresponds to a directory */
-	// TODO filed noch nicht implementiert
-	//struct filed * filed = find_file(fd);
+	/* check if name has room for READDIR_MAX_LEN +1 bytes */
+	syscall_check_pointer((const void *) name);
+	syscall_check_pointer((const void *) name + NAME_MAX + 1);
 
-	struct file * file = syscall_get_file(fd);
-	struct inode * my_inode = file_get_inode (file);
+	/* find the file and check if it corresponds to a directory */
+	struct file *file = syscall_get_file(fd);
+	struct inode *my_inode = file_get_inode (file);
     enum file_t type = inode_get_filetype (my_inode);
 
 	if (type == FILE) {
 		return false;
 	}
 	
-	/* now we can start */
-	//struct dir * mydir = (struct dir *)file->vaddr;
-	struct dir * mydir = (struct dir *)my_inode->sector;
-	bool success = dir_readdir (mydir, name);
+	/* create local dir copy from file */
+	struct dir mydir;
+	mydir.inode = file->inode;
+	mydir.pos = file->pos;
 
-	return success;
-
+	return dir_readdir(&mydir, name);
 }
 
 /* Returns true if fd represents a directory, false if it represents an 
