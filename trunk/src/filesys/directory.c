@@ -9,21 +9,6 @@
 
 #define DIR_DEBUG 0
 
-/* A directory. */
-struct dir 
-  {
-    struct inode *inode;                /* Backing store. */
-    off_t pos;                          /* Current position. */
-  };
-
-/* A single directory entry. */
-struct dir_entry 
-  {
-    block_sector_t inode_sector;        /* Sector number of header. */
-    char name[NAME_MAX + 1];            /* Null terminated file name. */
-    bool in_use;                        /* In use or free? */
-  };
-
 static char* string_self = ".";
 static char* string_parent = "..";
 
@@ -223,7 +208,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
 bool
 dir_remove (struct dir *dir, const char *name) 
 {
-	if(DIR_DEBUG) printf("DIR: removing dir\n");
+	if(DIR_DEBUG) printf("DIR: removing file %s from dir %u\n", name, dir->inode->sector);
   struct dir_entry e;
   struct inode *inode = NULL;
   bool success = false;
@@ -259,7 +244,7 @@ dir_remove (struct dir *dir, const char *name)
    NAME.  Returns true if successful, false if the directory
    contains no more entries. */
 bool
-dir_readdir (struct dir *dir, const char name[NAME_MAX + 1])
+dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 {
 	if(DIR_DEBUG) printf("DIR: reading dir\n");
   struct dir_entry e;
@@ -276,9 +261,10 @@ dir_readdir (struct dir *dir, const char name[NAME_MAX + 1])
   return false;
 }
 
-/* Extracts path and dir name from dir_path */
+/* Splits up dir_path and saves the corresponding parts into
+ * path and dir name. Returns true if legal, false if not. */
 bool
-dir_get_path_and_name (const char * dir_path, char* path, char* name)
+dir_get_path_and_file (const char * dir_path, char* path, char* name)
 {
 	if(DIR_DEBUG) printf("DIR: splitting up path in name and path: %s\n", dir_path);
 
@@ -366,8 +352,8 @@ dir_get_path_and_name (const char * dir_path, char* path, char* name)
 	return true;
 }
 
-/* searchs for the last directory in path, returns directory.
- * user has to close dir. */
+/* Opens directory at path. Returns directory on success, NULL on failure.
+ * User has to close dir. */
 struct dir*
 dir_getdir(const char *path)
 {

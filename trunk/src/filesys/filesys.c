@@ -7,6 +7,7 @@
 #include "filesys/inode.h"
 #include "filesys/directory.h"
 #include "filesys/cache.h"
+#include "threads/malloc.h"
 
 #define DEBUG_FILESYS 0
 
@@ -44,6 +45,33 @@ filesys_done (void)
 	free_map_close ();
 }
 
+/* Search for file name in directory tree.
+ * Returns file if successful, NULL otherwise. */
+static struct file*
+filesys_get_file (const char *name)
+{
+	/* check and fetch path and file name */
+	char *path = NULL;
+	char *file = NULL;
+	dir_get_path_and_file(name, path, file);
+
+	/* fetch target dir */
+	struct dir *target_dir = dir_getdir(path);
+
+	/* if target dir exists look for file */
+	if(target_dir != NULL)
+	{
+		/* fetch file */
+		struct inode *file_inode = NULL;
+		dir_lookup(target_dir, file, &file_inode);
+
+		/* close directory and return file */
+		dir_close (target_dir);
+		return file_open (file_inode);
+	}
+	return NULL;
+}
+
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,
@@ -51,24 +79,51 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size, enum file_t type) 
 {
-	if(DEBUG_FILESYS) printf("FILESYS: creating file %s with initial size %i\n", name, initial_size);
-  block_sector_t inode_sector = 0;
-  struct dir *dir = dir_open_root ();
-  
-  bool suc_dir = dir != NULL;
-  bool suc_fm = free_map_allocate (1, &inode_sector);
-  bool suc_ic = inode_create (inode_sector, initial_size, FILE);
-  bool suc_da = dir_add (dir, name, inode_sector);
+	if(DEBUG_FILESYS) printf("FILESYS: creating %s %s with initial size %i\n", type == FILE ? "file" : "directory", name, initial_size);
 
-  bool success = suc_dir && suc_fm && suc_ic && suc_da;
-  
-  if(DEBUG_FILESYS && !success) printf("FILESYS: creating file not successfull: dir!=NULL:%u | free-map:%u | inode-create:%u | dir-add:%u\n", (unsigned) suc_dir, (unsigned) suc_fm, (unsigned) suc_ic, (unsigned) suc_da);
+	bool success = false;
+	char *path = NULL;
+	char *file_name = NULL;
 
-  if (!success && inode_sector != 0) 
-    free_map_release (inode_sector, 1);
-  dir_close (dir);
+	/* split up path in file name and path */
+	if(name != NULL && dir_get_path_and_file(name, path, file_name))
+	{
+		/* fetch parent directory */
+		struct dir *parent = dir_getdir(path);
+		struct inode *parent_inode = dir_get_inode(parent);
 
-  return success;
+		/* if parent exists and name is ok */
+		if(parent != NULL)
+		{
+			/* allocate disk sector */
+			block_sector_t sector;
+			ASSERT(free_map_allocate(1, &sector));
+
+			if(type == DIRECTORY)
+			{
+				/* create dir */
+				ASSERT(dir_create(sector, parent_inode->sector));
+			}
+			else
+			{
+				/* create file */
+				ASSERT(inode_create(sector, parent_inode->sector, FILE));
+			}
+
+			/* save file/dir to parent dir */
+			dir_add(parent, file_name, sector);
+
+			/* close parent */
+			dir_close(parent);
+			success = true;
+		}
+
+		/* free resources */
+		free(path);
+		free(file_name);
+	}
+
+	return success;
 }
 
 /* Opens the file with the given NAME.
@@ -80,14 +135,8 @@ struct file *
 filesys_open (const char *name)
 {
 	if(DEBUG_FILESYS) printf("FILESYS: opening %s\n", name);
-  struct dir *dir = dir_open_root ();
-  struct inode *inode = NULL;
 
-  if (dir != NULL)
-    dir_lookup (dir, name, &inode);
-  dir_close (dir);
-
-  return file_open (inode);
+	return filesys_get_file(name);
 }
 
 /* Deletes the file named NAME.
@@ -97,11 +146,14 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, name);
-  dir_close (dir); 
+	if(DEBUG_FILESYS) printf("FILESYS: removing %s\n", name);
 
-  return success;
+	/* TODO check if directory */
+	struct dir *dir = dir_open_root ();
+	bool success = dir != NULL && dir_remove (dir, name);
+	dir_close (dir);
+
+	return success;
 }
 
 /* Formats the file system. */

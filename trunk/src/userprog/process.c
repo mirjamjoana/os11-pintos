@@ -159,7 +159,7 @@ no argument:
 
     /* get stack pointer */
     void* esp = if_.esp;
-    void* initial_esp = esp; /* debug */
+    //void* initial_esp = esp; /* debug */
 
 
   //  printf("Start copying %i arguments to stack. ESP: %x\n", argument_count, (unsigned) esp);
