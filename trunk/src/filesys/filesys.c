@@ -10,7 +10,7 @@
 #include "threads/malloc.h"
 #include "threads/thread.h" 
 
-#define DEBUG_FILESYS 0
+#define DEBUG_FILESYS 1
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -22,6 +22,8 @@ static void do_format (void);
 void
 filesys_init (bool format) 
 {
+	if(DEBUG_FILESYS) printf("FILESYS: init\n");
+
 	fs_device = block_get_role(BLOCK_FILESYS);
 
 	if (fs_device == NULL)
@@ -30,11 +32,17 @@ filesys_init (bool format)
 	inode_init();
 	free_map_init();
 	cache_init();
+	
+	/* setting main threads working directory to root */
+	thread_current()->working_dir = dir_open_root();
 
 	if (format)
 		do_format();
 
 	free_map_open();
+
+	if(DEBUG_FILESYS) printf("FILESYS: set thread {%s} working dir to %u\n", thread_current()->name, thread_current()->working_dir->inode->sector);
+
 }
 
 /* Shuts down the file system module, writing any unwritten data
@@ -54,10 +62,14 @@ filesys_get_file (const char *name)
 	/* check and fetch path and file name */
 	char *path = NULL;
 	char *file = NULL;
-	dir_get_path_and_file(name, path, file);
+	dir_get_path_and_file(name, &path, &file);
 
+	if(DEBUG_FILESYS) printf("FILESYS: dir path: {%s} dir name: {%s}\n", path, file);
+	if(DEBUG_FILESYS) printf("FILESYS: thread {%s} working dir: {%u}\n",thread_current()->name, thread_current()->working_dir->inode->sector);
 	/* fetch target dir */
-	struct dir *target_dir = dir_getdir(path);
+	struct dir *target_dir = path == NULL ? thread_current()->working_dir : dir_getdir(path);
+
+	if(DEBUG_FILESYS) printf("FILESYS: dir = %u\n", target_dir->inode->sector);
 
 	/* if target dir exists look for file */
 	if(target_dir != NULL)
@@ -87,10 +99,17 @@ filesys_create (const char *name, off_t initial_size, enum file_t type)
 	char *file_name = NULL;
 
 	/* split up path in file name and path */
-	if(name != NULL && dir_get_path_and_file(name, path, file_name))
+	if(name != NULL && dir_get_path_and_file(name, &path, &file_name))
 	{
 		/* fetch parent directory */
-		struct dir *parent = dir_getdir(path);
+		struct dir *parent;
+		
+		/* fetch parent */
+		if(path == NULL)
+			parent = thread_current()->working_dir;
+		else
+			parent = dir_getdir(path);
+
 		struct inode *parent_inode = dir_get_inode(parent);
 
 		/* if parent exists and name is ok */
@@ -158,7 +177,7 @@ filesys_remove (const char *name)
 		/* check and fetch path and file name */
 		char *path = NULL;
 		char *file = NULL;
-		bool success = dir_get_path_and_file(name, path, file);
+		bool success = dir_get_path_and_file(name, &path, &file);
 		if (!success) return false;
 		
 		//get the correct dir
