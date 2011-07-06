@@ -116,7 +116,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
 		if(offset < INODE_DIRECT_BLOCKS)
 		{
 			block_sector = id->direct_block_sectors[offset];
-			if(INODE_DEBUG) printf("INODE: offset %i in inode %u leads to direct block sector %u\n", pos, inode->sector, block_sector);
+			//if(INODE_DEBUG) printf("INODE: offset %i in inode %u leads to direct block sector %u\n", pos, inode->sector, block_sector);
 		}
 
 		/* read from indirect block sector */
@@ -126,7 +126,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
 			cache_read(id->indirect_block_sector, (void *) &block_sector,
 					indirect_offset * sizeof(block_sector_t), sizeof(block_sector_t));
 			
-			if(INODE_DEBUG) printf("INODE: offset %i in inode %u leads to indirect block sector %u\n", pos, inode->sector, block_sector);
+			//if(INODE_DEBUG) printf("INODE: offset %i in inode %u leads to indirect block sector %u\n", pos, inode->sector, block_sector);
 		}
 
 		/* read from doubly indirect block sector */
@@ -147,7 +147,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
 			cache_read(block_sector, (void *) &block_sector,
 					indirect_offset * sizeof(block_sector_t), sizeof(block_sector_t));
 			
-			if(INODE_DEBUG) printf("INODE: offset %i in inode %u leads to doubly indirect block sector %u\n", pos, inode->sector, block_sector);
+			//if(INODE_DEBUG) printf("INODE: offset %i in inode %u leads to doubly indirect block sector %u\n", pos, inode->sector, block_sector);
 
 		}
 		else
@@ -353,6 +353,8 @@ inode_extend (struct inode* inode, off_t ext_length)
 	cache_write(inode->sector, (void *) &id->length, INODE_OFFSET_LENGTH, 4);
 
 	lock_release(&inode->lock);
+	
+	if(INODE_DEBUG || FILE_DEBUG) printf("INODE: completetd extending inode %u by %i bytes : %u\n", inode->sector, ext_length, (unsigned)success);
 
 	return success;
 }
@@ -593,7 +595,7 @@ void
 inode_close (struct inode *inode) 
 {
 	if(INODE_DEBUG || FILE_DEBUG) printf("INODE: closing inode %u \n", inode->sector);
-	if(INODE_DEBUG && INODE_PRINT) inode_print(inode);
+	if(INODE_PRINT) inode_print(inode);
 
 	/* Ignore null pointer. */
 	if (inode == NULL)
@@ -646,8 +648,6 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 		/* Disk sector to read, starting byte offset within sector. */
 		block_sector_t sector_idx = byte_to_sector (inode, offset);
 	
-		if(INODE_DEBUG) printf("INODE: offset belongs to sector %u \n", sector_idx);
-
 		int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
 		/* legal sector found */
@@ -713,16 +713,27 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 		ASSERT(inode_extend (inode, offset + size - length));
 	
 		/* update length */
-		length += size;
+		length += offset + size;
 	}
 
+/*	
+	bool findSomething = false;
+	if(offset == 29241) {
+		findSomething = true;
+		printf("START findSomething DEBUG MODE\n");
+	}
+*/
 	/* write to file */
 	while (size > 0)
 	{
+		//if(findSomething) printf("LOOP\n");
+	
 		/* Sector to write, starting byte offset within sector. */
 		block_sector_t sector_idx = byte_to_sector (inode, offset);
 		int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
+		//if(findSomething) printf("a\n");
+		
 		/* Bytes left in inode, bytes left in sector, lesser of the two. */
 		off_t inode_left = length - offset;
 		int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
@@ -733,14 +744,19 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 		if (chunk_size <= 0)
 			break;
 
+		//if(findSomething) printf("chunk size: %i\n", chunk_size);
+		//if(findSomething) printf("cache_write(sector %u, buffer %u, sector offset %i, chunk size %i\n", sector_idx, (unsigned) buffer + bytes_written, sector_ofs, chunk_size);
+		
 		/* write chunk to cache */
 		cache_write(sector_idx, buffer + bytes_written, sector_ofs, chunk_size);
-		
+	
 		/* Advance. */
 		size -= chunk_size;
 		offset += chunk_size;
 		bytes_written += chunk_size;
     }
+
+	//if(findSomething) printf("Bytes written: %u\n", bytes_written);
 
 	return bytes_written;
 }
