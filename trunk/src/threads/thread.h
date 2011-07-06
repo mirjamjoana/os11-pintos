@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "filesys/file.h"
+#include "filesys/directory.h"
 #include "threads/synch.h"
 
 #define DEBUG 0
@@ -107,6 +108,8 @@ struct thread
     struct list_elem elem;              /* List element. */
 
     long int wakeup_tick;				/* Soonest tick at which the thread is waken by the scheduler. */
+
+	struct dir * working_dir;			/* current working directory */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
