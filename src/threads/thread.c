@@ -203,12 +203,10 @@ thread_create (const char *name, int priority,
 	t->exit_status = -1;
 	t->parent = thread_current();
 
-printf("---------XXXXXXXXXXXXXXXXXXXXXXXXXX_---------------------\n");
-
 	/* if child thread and not idle or main set working dir */
 	if(t != initial_thread && strcmp(name, "idle") != 0)
 	{
-		printf("---------yyyyyyyyyyyyyyyyyy---------------------\n");
+		if(DEBUG) printf("THREAD: inherit working dir to child thread {%s}\n", name);
 		t->working_dir = dir_reopen(thread_current()->working_dir);
 	}
 

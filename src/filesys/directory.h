@@ -44,6 +44,6 @@ bool dir_readdir (struct dir *, char name[NAME_MAX + 1]);
 /* Utilities. */
 bool dir_get_path_and_file (const char * dir_path, char** path, char** name);
 struct dir* dir_getdir(const char *path);
-bool dir_isempty (struct dir* dir, const char *name);
+bool dir_isempty (struct dir* dir/*, const char *name*/);
 
 #endif /* filesys/directory.h */

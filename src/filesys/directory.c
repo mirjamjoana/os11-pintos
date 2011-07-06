@@ -40,7 +40,7 @@ dir_create (block_sector_t sector, block_sector_t parent)
 struct dir *
 dir_open (struct inode *inode) 
 {
-	if(DIR_DEBUG) printf("DIR: opening dir @ sector NA\n");
+	if(DIR_DEBUG) printf("DIR: opening dir @ sector %u\n", inode->sector);
 
   struct dir *dir = calloc (1, sizeof *dir);
   if (inode != NULL && dir != NULL)
@@ -370,7 +370,7 @@ dir_getdir(const char *path)
 	if(path[0] == '/')
 		current_dir = dir_open_root();
 	else
-		current_dir = thread_current()->working_dir; /* TODO reopen? */
+		current_dir = dir_reopen(thread_current()->working_dir);
 
 	/* create local copy of dir_path */
 	char* path_copy = malloc(path_len + 1);
