@@ -204,6 +204,7 @@ thread_create (const char *name, int priority,
 	t->fd_next_id = 2;
 	t->exit_status = -1;
 	t->parent = thread_current();
+	t->working_dir = thread_current()->working_dir;
 
 	/* initialize list of file descriptors */
 	list_init (&(t->file_descriptors));

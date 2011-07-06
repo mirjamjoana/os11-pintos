@@ -12,6 +12,10 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "devices/shutdown.h"
+#include "filesys/free-map.h"
+#include "filesys/inode.h"
+
+#define GLOBAL_LOCKS 1
 
 #define CONSOLE_BUFFER_SIZE 100
 #define MAX_OPEN_FILES 128
@@ -225,7 +229,7 @@ static void
 handle_create(struct intr_frame *f UNUSED)
 {
 	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 
 	if(DEBUG_SYSCALL) printf("create\n");
 
@@ -241,7 +245,7 @@ handle_create(struct intr_frame *f UNUSED)
 	syscall_set_return_value(f, (int) success);
 
 	/* release file system lock */
-	lock_release(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_release(&filesystem_lock);
 
 }
 	
@@ -249,7 +253,7 @@ static void
 handle_remove(struct intr_frame *f)
 {
 	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 
 	if(DEBUG_SYSCALL) printf("remove\n");
 
@@ -263,14 +267,14 @@ handle_remove(struct intr_frame *f)
 	syscall_set_return_value(f, (int) success);
 
 	/* release file system lock */
-	lock_release(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_release(&filesystem_lock);
 }
 	
 static void
 handle_open(struct intr_frame *f)
 {
 	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 
 	if(DEBUG_SYSCALL) printf("open\n");
 
@@ -284,14 +288,14 @@ handle_open(struct intr_frame *f)
 	syscall_set_return_value(f, handle);
 
 	/* release file system lock */
-	lock_release(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_release(&filesystem_lock);
 }
 
 static void
 handle_filesize(struct intr_frame *f)
 {
 	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 
 	if(DEBUG_SYSCALL) printf("filesize\n");
 
@@ -304,7 +308,7 @@ handle_filesize(struct intr_frame *f)
 	syscall_set_return_value(f, size);
 
 	/* release file system lock */
-	lock_release(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_release(&filesystem_lock);
 
 }
 	
@@ -312,7 +316,7 @@ static void
 handle_read(struct intr_frame *f)
 {
 	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 
 	if(DEBUG_SYSCALL) printf("read\n");
 
@@ -330,7 +334,7 @@ handle_read(struct intr_frame *f)
 	syscall_set_return_value(f, read_count);
 
 	/* release file system lock */
-	lock_release(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_release(&filesystem_lock);
 
 }
 	
@@ -338,7 +342,7 @@ static void
 handle_write(struct intr_frame *f)
 {
 	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 
 	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
 	const void *buffer = (const void*) syscall_get_argument(f, 1); /* target buffer pointer */
@@ -355,14 +359,14 @@ handle_write(struct intr_frame *f)
 	syscall_set_return_value(f, write_count);
 
 	/* release file system lock */
-	lock_release(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_release(&filesystem_lock);
 }
 	
 static void
 handle_seek(struct intr_frame *f)
 {
 	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 
 	if(DEBUG_SYSCALL) printf("seek\n");
 
@@ -373,14 +377,14 @@ handle_seek(struct intr_frame *f)
 	seek(fd, position);
 
 	/* release file system lock */
-	lock_release(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_release(&filesystem_lock);
 }
 	
 static void
 handle_tell(struct intr_frame *f)
 {
 	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 
 	if(DEBUG_SYSCALL) printf("tell\n");
 
@@ -393,14 +397,14 @@ handle_tell(struct intr_frame *f)
 	syscall_set_return_value(f, (int) position);
 
 	/* release file system lock */
-	lock_release(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_release(&filesystem_lock);
 }
 	
 static void 
 handle_close(struct intr_frame *f UNUSED) 
 {	
 	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 
 	if(DEBUG_SYSCALL) printf("close\n");
 
@@ -410,14 +414,14 @@ handle_close(struct intr_frame *f UNUSED)
 	close(fd);
 
 	/* release file system lock */
-	lock_release(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_release(&filesystem_lock);
 }
 
 static void 
 handle_chdir(struct intr_frame *f) {
-	/* TODO */
+
 	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 
 	if(DEBUG_SYSCALL) printf("chdir\n");
 	
@@ -432,14 +436,14 @@ handle_chdir(struct intr_frame *f) {
 	syscall_set_return_value(f, success);
 
 	/* release file system lock */
-	lock_release(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_release(&filesystem_lock);
 }
 
 static void 
 handle_mkdir(struct intr_frame *f) {
-	/* TODO */
+
 	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 	
 	if(DEBUG_SYSCALL) printf("mkdir\n");
 	
@@ -454,14 +458,14 @@ handle_mkdir(struct intr_frame *f) {
 	syscall_set_return_value(f, success);
 
 	/* release file system lock */
-	lock_release(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_release(&filesystem_lock);
 }
 
 static void 
 handle_readdir(struct intr_frame *f) {
 	/* TODO */
 	/* acquire file system lock */
-	lock_acquire(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_acquire(&filesystem_lock);
 	
 	if(DEBUG_SYSCALL) printf("readdir\n");
 	
@@ -477,7 +481,7 @@ handle_readdir(struct intr_frame *f) {
 	syscall_set_return_value(f, success);
 
 	/* release file system lock */
-	lock_release(&filesystem_lock);
+	if(GLOBAL_LOCKS) lock_release(&filesystem_lock);
 	
 }
 
@@ -981,7 +985,7 @@ syscall_get_file(int file_descriptor)
 /* Changes the current working directory of the process to dir, 
  which may be relative or absolute. Returns true if successful, false on failure. */
 bool
-chdir (const char *dir) {
+chdir (const char *dir UNUSED) {
 	/* TODO */ 
 	return false;
 }
@@ -993,8 +997,42 @@ chdir (const char *dir) {
  "/a/b/c" does not.  */
 bool 
 mkdir (const char *dir) {
-	/* TODO */ 
-	return false;
+
+	bool success = false;
+	char *path = NULL;
+	char *dir_name = NULL;
+
+	/* split up path in new dir name and path to new dir */
+	if(dir_get_path_and_name(dir, path, dir_name))
+	{
+		/* fetch parent directory */
+		struct dir *parent = dir_getdir(path);
+		struct inode *parent_inode = dir_get_inode(parent);
+
+		/* if parent exists and name is ok */
+		if(dir != NULL)
+		{
+			/* allocate disk sector */
+			block_sector_t dir_sector;
+			ASSERT(free_map_allocate(1, &dir_sector));
+
+			/* create dir */
+			ASSERT(dir_create(dir_sector, parent_inode->sector));
+
+			/* save new dir to parent dir */
+			dir_add(parent, dir_name, dir_sector);
+
+			success = true;
+
+			dir_close(parent);
+		}
+
+		free(parent);
+		free(path);
+		free(dir_name);
+	}
+
+	return success;
 }
 
 /* Reads a directory entry from file descriptor fd, which must represent 
@@ -1002,7 +1040,7 @@ mkdir (const char *dir) {
  which must have room for READDIR_MAX_LEN + 1 bytes, and returns true. 
  If no entries are left in the directory, returns false.  */
 bool 
-readdir (int fd, const char *name) {
+readdir (int fd UNUSED, const char *name UNUSED) {
 	/* TODO */ 
 	return false;
 }
@@ -1010,7 +1048,7 @@ readdir (int fd, const char *name) {
 /* Returns true if fd represents a directory, false if it represents an 
  ordinary file.  */
 bool 
-isdir (int fd) {
+isdir (int fd UNUSED) {
 	/* TODO */ 
 	return false;
 }
@@ -1018,7 +1056,7 @@ isdir (int fd) {
 /* Returns the inode number of the inode associated with fd, 
    which may represent an ordinary file or a directory.  */
 int 
-inumber (int fd) {
+inumber (int fd UNUSED) {
 	/* TODO */
 	return 0;
 }
