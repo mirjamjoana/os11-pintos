@@ -8,6 +8,7 @@
 #include "filesys/directory.h"
 #include "filesys/cache.h"
 #include "threads/malloc.h"
+#include "threads/thread.h" 
 
 #define DEBUG_FILESYS 0
 
@@ -149,13 +150,51 @@ filesys_remove (const char *name)
 	if(DEBUG_FILESYS) printf("FILESYS: removing %s\n", name);
 
 	/* TODO check if directory */
-	struct dir *dir = dir_open_root ();
-	bool success = dir != NULL && dir_remove (dir, name);
-	dir_close (dir);
+	struct file *file = filesys_open(name);
+	struct inode * my_inode = file_get_inode (file);
+	enum file_t type = inode_get_filetype (my_inode);
 
-	return success;
+	if (type == DIRECTORY) {
+		/* check and fetch path and file name */
+		char *path = NULL;
+		char *file = NULL;
+		bool success = dir_get_path_and_file(name, path, file);
+		if (!success) return false;
+		
+		//get the correct dir
+		struct dir *dir = dir_getdir(path);
+
+		/* get sectors of given directory, root and current working director */
+		block_sector_t sector = my_inode->sector;
+		block_sector_t temp1 = file_get_inode((void *)(thread_current()->working_dir))->sector;
+		block_sector_t temp2 = file_get_inode((void *)dir_open_root())->sector;
+
+		/* check whether this is an attempt to delete the current or root directory */
+		if (sector == temp1 || sector == temp2) {
+			return false;
+		}
+		else {
+			/* check if directory is empty */
+			bool success = dir != NULL && dir_isempty (dir);
+			if (!success) {
+				dir_close(dir);
+				return false;
+			}
+			/* is it still opened? */
+			if (my_inode->open_cnt > 1) return false;
+			else /* TODO loeschen */ return true;
+		}
+	}
+	else {
+		/* TODO alter Code */
+		struct dir *dir = dir_open_root ();
+		bool success = dir != NULL && dir_remove (dir, name);
+		dir_close (dir);
+
+		return success;
+	}
 }
-
+
 /* Formats the file system. */
 static void
 do_format (void)

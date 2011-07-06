@@ -404,3 +404,24 @@ dir_getdir(const char *path)
 	return current_dir;
 }
 
+/* Returns true iff "." and ".." are the only inhabitants of dir */
+bool
+dir_isempty (struct dir* dir) {
+	struct dir_entry e;
+	struct inode *inode = NULL;
+
+	/* Open inode. */
+  	inode = inode_open (e.inode_sector);
+
+	char * temp = (char *)malloc(sizeof(char) * (NAME_MAX + 1) );
+    struct dir * dirtemp = dir_open(inode);
+
+	//is dir empty?
+    if (dir_readdir(dirtemp,temp)) {
+    	free(temp);
+        dir_close(dirtemp);
+        return false;
+	}
+	else return true;
+
+}
