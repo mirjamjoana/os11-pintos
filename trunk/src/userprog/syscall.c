@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include <list.h>
+#include "lib/string.h"
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
@@ -11,6 +12,7 @@
 #include "threads/malloc.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "filesys/inode.h"
 #include "devices/shutdown.h"
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
@@ -619,7 +621,7 @@ bool
 create (const char *file, unsigned initial_size)
 {
 	/* create file called file with initial size initial_size*/
-	return filesys_create(file, initial_size);
+	return filesys_create(file, initial_size, FILE);
 }
 
 /*
@@ -986,8 +988,32 @@ syscall_get_file(int file_descriptor)
  which may be relative or absolute. Returns true if successful, false on failure. */
 bool
 chdir (const char *dir UNUSED) {
-	/* TODO */ 
-	return false;
+
+    /* if empty or root return false */
+    if(strlen(dir) ==  0 || strcmp( dir, "/")) return false;
+
+    /* open file */
+    struct file * file  = filesys_open(dir);
+
+    if ( file == NULL ) {
+		file_close(file);
+        return false;
+    }
+    struct inode * my_inode = file_get_inode (file);
+
+    enum file_t type = inode_get_filetype (my_inode);
+
+    //if the file is a dir open it and set pwd to it
+    if(type == DIRECTORY) {
+        dir_close(thread_current()->working_dir);
+        thread_current()->working_dir = dir_open(inode_reopen(my_inode));
+		file_close(file);
+		return true;
+	}
+    else {
+		file_close(file);
+		return false;
+	}
 }
 
 /* Creates the directory named dir, which may be relative or absolute. 
@@ -1040,24 +1066,77 @@ mkdir (const char *dir) {
  which must have room for READDIR_MAX_LEN + 1 bytes, and returns true. 
  If no entries are left in the directory, returns false.  */
 bool 
-readdir (int fd UNUSED, const char *name UNUSED) {
-	/* TODO */ 
-	return false;
+readdir (int fd, const char *name) {
+	
+	/* check if it is a directory */
+	if (!isdir(fd)) {
+		return false;
+	}
+	
+	/* find the file and check if it corresponds to a directory */
+	// TODO filed noch nicht implementiert
+	//struct filed * filed = find_file(fd);
+
+	struct file * file = syscall_get_file(fd);
+	struct inode * my_inode = file_get_inode (file);
+    enum file_t type = inode_get_filetype (my_inode);
+
+	if (type == FILE) {
+		return false;
+	}
+	
+	/* now we can start */
+	//struct dir * mydir = (struct dir *)file->vaddr;
+	struct dir * mydir = (struct dir *)my_inode->sector;
+	bool success = dir_readdir (mydir, name);
+
+	return success;
+
 }
 
 /* Returns true if fd represents a directory, false if it represents an 
  ordinary file.  */
 bool 
-isdir (int fd UNUSED) {
-	/* TODO */ 
-	return false;
+isdir (int fd) {
+
+	struct file * file = syscall_get_file(fd);
+
+	if (file == NULL) {
+		return false;
+	}
+
+	struct inode * my_inode = file_get_inode (file);
+
+	if (my_inode == NULL) {
+		return false;
+	}
+	
+	/* check if it is a directory */
+    enum file_t type = inode_get_filetype (my_inode);
+	
+	if (type == DIRECTORY) return true;
+	else return false;
+
 }
 
 /* Returns the inode number of the inode associated with fd, 
    which may represent an ordinary file or a directory.  */
 int 
-inumber (int fd UNUSED) {
-	/* TODO */
-	return 0;
+inumber (int fd) {
+
+	struct file * file = syscall_get_file(fd);
+
+	if (file == NULL) {
+		return -1;
+	}
+	
+	struct inode * my_inode = file_get_inode (file);
+
+	if (my_inode == NULL) {
+		return -1;
+	}
+
+	return inode_get_inumber(my_inode);
+
 }
 
