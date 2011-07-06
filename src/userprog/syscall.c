@@ -34,6 +34,11 @@ static void handle_write(struct intr_frame *f);
 static void handle_seek(struct intr_frame *f);
 static void handle_tell(struct intr_frame *f);
 static void handle_close(struct intr_frame *f);
+static void handle_chdir(struct intr_frame *f);
+static void handle_mkdir(struct intr_frame *f);
+static void handle_readdir(struct intr_frame *f);
+static void handle_isdir(struct intr_frame *f);
+static void handle_inumber(struct intr_frame *f);
 static void handle_no_such_syscall(struct intr_frame *f);
 
 static void* syscall_get_argument(const struct intr_frame *f, unsigned int arg_number);
@@ -55,6 +60,11 @@ int write (int fd, const void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+bool chdir(const char *dir);
+bool mkdir (const char *dir);
+bool readdir (int fd, const char *name);
+bool isdir (int fd);
+int inumber (int fd);
 
 /* global variables */
 extern struct lock filesystem_lock; /* mutex semaphore for filesystem */
@@ -134,6 +144,26 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_CLOSE:
 			handle_close(f);
+			break;
+
+		case SYS_CHDIR:
+			handle_chdir(f);
+			break;
+
+		case SYS_MKDIR:
+			handle_mkdir(f);
+			break;
+
+		case SYS_READDIR:
+			handle_readdir(f);
+			break;
+
+		case SYS_ISDIR:
+			handle_isdir(f);
+			break;
+
+		case SYS_INUMBER:
+			handle_inumber(f);
 			break;
 
 		default: /* SYSCALL_ERROR: */
@@ -381,6 +411,102 @@ handle_close(struct intr_frame *f UNUSED)
 
 	/* release file system lock */
 	lock_release(&filesystem_lock);
+}
+
+static void 
+handle_chdir(struct intr_frame *f) {
+	/* TODO */
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+
+	if(DEBUG_SYSCALL) printf("chdir\n");
+	
+	const char* dir = (const char*)  syscall_get_argument(f, 0); /* directory */
+
+	syscall_check_pointer((const void *) dir);	/* check the file */
+
+	/* change directory and save success */
+	bool success = chdir(dir);
+
+	/* return success */
+	syscall_set_return_value(f, success);
+
+	/* release file system lock */
+	lock_release(&filesystem_lock);
+}
+
+static void 
+handle_mkdir(struct intr_frame *f) {
+	/* TODO */
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+	
+	if(DEBUG_SYSCALL) printf("mkdir\n");
+	
+	const char* dir = (const char*)  syscall_get_argument(f, 0); /* directory */
+
+	syscall_check_pointer((const void *) dir);	/* check the file */
+
+	/* create directory and save success */
+	bool success = mkdir(dir);
+
+	/* return success */
+	syscall_set_return_value(f, success);
+
+	/* release file system lock */
+	lock_release(&filesystem_lock);
+}
+
+static void 
+handle_readdir(struct intr_frame *f) {
+	/* TODO */
+	/* acquire file system lock */
+	lock_acquire(&filesystem_lock);
+	
+	if(DEBUG_SYSCALL) printf("readdir\n");
+	
+	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
+	const char* name = (const char*)  syscall_get_argument(f, 1); /* file name */
+
+	syscall_check_pointer((const void *) name);	/* check the file */
+
+	/* read directory and save success */
+	bool success = readdir(fd, name);
+
+	/* return success */
+	syscall_set_return_value(f, success);
+
+	/* release file system lock */
+	lock_release(&filesystem_lock);
+	
+}
+
+static void 
+handle_isdir(struct intr_frame *f) {
+	/* TODO */
+	if(DEBUG_SYSCALL) printf("isdir\n");
+	
+	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
+
+	/* check type of fd and save success */
+	bool success = isdir(fd);
+
+	/* return success */
+	syscall_set_return_value(f, success);
+}
+
+static void 
+handle_inumber(struct intr_frame *f) {
+	/* TODO */
+	if(DEBUG_SYSCALL) printf("inumber\n");
+	
+	int fd = (int) syscall_get_argument(f, 0); /* file descriptor */
+
+	/* get i-number and save it */
+	int number = inumber(fd);
+
+	/* return success */
+	syscall_set_return_value(f, number);
 }
 	
 static void
@@ -851,3 +977,49 @@ syscall_get_file(int file_descriptor)
 	/* if no file descriptor is found, return null */
 	return NULL;
 }
+
+/* Changes the current working directory of the process to dir, 
+ which may be relative or absolute. Returns true if successful, false on failure. */
+bool
+chdir (const char *dir) {
+	/* TODO */ 
+	return false;
+}
+
+/* Creates the directory named dir, which may be relative or absolute. 
+ Returns true if successful, false on failure. Fails if dir already exists 
+ or if any directory name in dir, besides the last, does not already exist. 
+ That is, mkdir("/a/b/c") succeeds only if "/a/b" already exists and 
+ "/a/b/c" does not.  */
+bool 
+mkdir (const char *dir) {
+	/* TODO */ 
+	return false;
+}
+
+/* Reads a directory entry from file descriptor fd, which must represent 
+ a directory. If successful, stores the null-terminated file name in name, 
+ which must have room for READDIR_MAX_LEN + 1 bytes, and returns true. 
+ If no entries are left in the directory, returns false.  */
+bool 
+readdir (int fd, const char *name) {
+	/* TODO */ 
+	return false;
+}
+
+/* Returns true if fd represents a directory, false if it represents an 
+ ordinary file.  */
+bool 
+isdir (int fd) {
+	/* TODO */ 
+	return false;
+}
+
+/* Returns the inode number of the inode associated with fd, 
+   which may represent an ordinary file or a directory.  */
+int 
+inumber (int fd) {
+	/* TODO */
+	return 0;
+}
+
