@@ -149,10 +149,10 @@ filesys_remove (const char *name)
 {
 	if(DEBUG_FILESYS) printf("FILESYS: removing %s\n", name);
 
-	/* TODO check if directory */
+	/* check if directory */
 	struct file *file = filesys_open(name);
-	struct inode * my_inode = file_get_inode (file);
-	enum file_t type = inode_get_filetype (my_inode);
+	struct inode * my_inode = file_get_inode(file);
+	enum file_t type = inode_get_filetype(my_inode);
 
 	if (type == DIRECTORY) {
 		/* check and fetch path and file name */
@@ -175,7 +175,7 @@ filesys_remove (const char *name)
 		}
 		else {
 			/* check if directory is empty */
-			bool success = dir != NULL && dir_isempty (dir);
+			bool success = dir != NULL && dir_isempty (dir, name);
 			if (!success) {
 				dir_close(dir);
 				return false;

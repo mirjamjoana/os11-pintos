@@ -406,20 +406,27 @@ dir_getdir(const char *path)
 
 /* Returns true iff "." and ".." are the only inhabitants of dir */
 bool
-dir_isempty (struct dir* dir) {
+dir_isempty (struct dir* dir, const char *name) {
 	struct dir_entry e;
 	struct inode *inode = NULL;
+	off_t ofs;
+
+	/* Find directory entry */
+	if (!lookup (dir, name, &e, &ofs)) {
+    	return false;
+	}
 
 	/* Open inode. */
-  	inode = inode_open (e.inode_sector);
+  	inode = inode_open(e.inode_sector);
 
 	char * temp = (char *)malloc(sizeof(char) * (NAME_MAX + 1) );
     struct dir * dirtemp = dir_open(inode);
 
-	//is dir empty?
+	/* is dir empty? */
     if (dir_readdir(dirtemp,temp)) {
     	free(temp);
         dir_close(dirtemp);
+		inode_close (inode);
         return false;
 	}
 	else return true;
