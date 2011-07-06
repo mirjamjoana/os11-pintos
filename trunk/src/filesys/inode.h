@@ -4,12 +4,26 @@
 #include <stdbool.h>
 #include "filesys/off_t.h"
 #include "devices/block.h"
+#include "threads/synch.h"
+#include <list.h>
 
 struct bitmap;
 
 enum file_t {
 	FILE,
 	DIRECTORY
+};
+
+/* In-memory inode. */
+struct inode
+{
+    struct list_elem elem;              /* Element in inode list. */
+
+    block_sector_t sector;              /* Sector number (disk location) of inode_disk. */
+    int open_cnt;                       /* Number of openers. */
+    bool removed;                       /* True if deleted, false otherwise. */
+    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+    struct lock lock;					/* INODE lock. */
 };
 
 void inode_init (void);

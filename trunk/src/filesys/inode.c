@@ -56,19 +56,6 @@ bytes_to_sectors (off_t size)
   return DIV_ROUND_UP (size, BLOCK_SECTOR_SIZE);
 }
 
-/* In-memory inode. */
-struct inode 
-  {
-    struct list_elem elem;              /* Element in inode list. */
-
-    block_sector_t sector;              /* Sector number (disk location) of inode_disk. */
-    int open_cnt;                       /* Number of openers. */
-    bool removed;                       /* True if deleted, false otherwise. */
-    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-    struct lock lock;					/* INODE lock. */
-  };
-
-
 static void
 inode_print(struct inode *inode)
 {

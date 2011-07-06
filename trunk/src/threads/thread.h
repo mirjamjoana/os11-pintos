@@ -109,7 +109,7 @@ struct thread
 
     long int wakeup_tick;				/* Soonest tick at which the thread is waken by the scheduler. */
 
-	struct dir * working_dir;			/* current working directory */
+	struct dir *working_dir;			/* current working directory */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
