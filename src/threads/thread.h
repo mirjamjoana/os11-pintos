@@ -8,7 +8,7 @@
 #include "filesys/directory.h"
 #include "threads/synch.h"
 
-#define DEBUG 0
+#define DEBUG 1
 
 /* States in a thread's life cycle. */
 enum thread_status

@@ -106,9 +106,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-
-  /* set working directory to root */
-  initial_thread->working_dir = dir_open_root();
+  initial_thread->working_dir = NULL;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -177,7 +175,7 @@ tid_t
 thread_create (const char *name, int priority,
                thread_func *function, void *aux)
 {
-	if(DEBUG) printf("creating thread\n");
+	if(DEBUG) printf("creating thread {%s} by {%s}\n", name, thread_current()->name);
 
 	struct thread *t;
 	struct kernel_thread_frame *kf;
@@ -204,7 +202,15 @@ thread_create (const char *name, int priority,
 	t->fd_next_id = 2;
 	t->exit_status = -1;
 	t->parent = thread_current();
-	t->working_dir = thread_current()->working_dir;
+
+printf("---------XXXXXXXXXXXXXXXXXXXXXXXXXX_---------------------\n");
+
+	/* if child thread and not idle or main set working dir */
+	if(t != initial_thread && strcmp(name, "idle") != 0)
+	{
+		printf("---------yyyyyyyyyyyyyyyyyy---------------------\n");
+		t->working_dir = dir_reopen(thread_current()->working_dir);
+	}
 
 	/* initialize list of file descriptors */
 	list_init (&(t->file_descriptors));
@@ -563,7 +569,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->wakeup_tick = -1;
-
+  
   /* initialize children list */
   list_init (&(t->children));
 

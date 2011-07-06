@@ -69,7 +69,7 @@ process_execute (const char *command_line_input)
 static void
 start_process (void *command_line_input)
 {
-    /* loop variables */
+	/* loop variables */
     char *token, *save_ptr;
 
     /* copy of the command line input */

@@ -7,7 +7,7 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 
-#define DIR_DEBUG 0
+#define DIR_DEBUG 1
 
 static char* string_self = ".";
 static char* string_parent = "..";
@@ -102,7 +102,7 @@ static bool
 lookup (const struct dir *dir, const char *name,
         struct dir_entry *ep, off_t *ofsp) 
 {
-	if(DIR_DEBUG) printf("DIR: looking up file %s in dir ... \n", name);
+	if(DIR_DEBUG) printf("DIR: looking up file %s in dir %u\n", name, dir->inode->sector);
 
 	struct dir_entry e;
 	size_t ofs;
@@ -264,7 +264,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 /* Splits up dir_path and saves the corresponding parts into
  * path and dir name. Returns true if legal, false if not. */
 bool
-dir_get_path_and_file (const char * dir_path, char* path, char* name)
+dir_get_path_and_file (const char * dir_path, char** path, char** name)
 {
 	if(DIR_DEBUG) printf("DIR: splitting up path in name and path: %s\n", dir_path);
 
@@ -285,9 +285,11 @@ dir_get_path_and_file (const char * dir_path, char* path, char* name)
 
 	size_t dir_path_len = strlen(dir_path);
 
+	if(DIR_DEBUG) printf("DIR: length of %s:%u \n", dir_path, dir_path_len);
+	
 	/* create local copy of dir_path */
 	char* local_copy = malloc(dir_path_len + 1);
-	strlcpy(local_copy, dir_path, dir_path_len);
+	strlcpy(local_copy, dir_path, dir_path_len + 1);
 
 	/* delete last character if its '/' */
 	if((size_t) strrchr(local_copy, '/') == dir_path_len){
@@ -311,10 +313,9 @@ dir_get_path_and_file (const char * dir_path, char* path, char* name)
 	/* relative, no path */
 	if(seperator == NULL)
 	{
-		path = NULL;
-		name = local_copy;
+		*name = local_copy;
 
-		if(DIR_DEBUG) printf("DIR: split up path in name and path - path : {}, name : {%s}\n", name);
+		if(DIR_DEBUG) printf("DIR: 1 split up path in name and path - path : NULL, name : {%s}\n", *name);
 
 		return true;
 	}
@@ -322,14 +323,14 @@ dir_get_path_and_file (const char * dir_path, char* path, char* name)
 	/* absolute, no path (=root) */
 	else if(seperator == local_copy)
 	{
-		path = malloc(2);
-		*path = '/';
-		*(path + sizeof(char)) = 0x0;
+		*path = malloc(2);
+		(*path)[0] = '/';
+		(*path)[1] = 0x0;
 
-		name = malloc(dir_path_len);
-		strlcpy(name, dir_path + sizeof(char), dir_path_len - 1);
+		*name = malloc(dir_path_len);
+		strlcpy(*name, dir_path + sizeof(char), dir_path_len);
 
-		if(DIR_DEBUG) printf("DIR: split up path in name and path - path : {%s}, name : {%s}\n", path, name);
+		if(DIR_DEBUG) printf("DIR: 2 split up path in name and path - path : {%s}, name : {%s}\n", *path, *name);
 	}
 
 	/* everything else */
@@ -337,15 +338,15 @@ dir_get_path_and_file (const char * dir_path, char* path, char* name)
 	{
 		/* save path */
 		unsigned path_len = seperator - local_copy;
-		path = malloc(path_len + 1);
-		strlcpy(path, local_copy, path_len);
+		*path = malloc(path_len + 1);
+		strlcpy(*path, local_copy, path_len + 1);
 
 		/* save dir name */
 		unsigned name_len = dir_path_len - (seperator - local_copy);
-		name = malloc(name_len + 1);
-		strlcpy(name, seperator + 1, name_len);
+		*name = malloc(name_len + 1);
+		strlcpy(*name, seperator + 1, name_len + 1);
 
-		if(DIR_DEBUG) printf("DIR: split up path in name and path - path : {%s}, name : {%s}\n", path, name);
+		if(DIR_DEBUG) printf("DIR: 3 split up path in name and path - path : {%s}, name : {%s}\n", *path, *name);
 	}
 
 	free(local_copy);
@@ -357,6 +358,11 @@ dir_get_path_and_file (const char * dir_path, char* path, char* name)
 struct dir*
 dir_getdir(const char *path)
 {
+	if(DIR_DEBUG) printf("DIR: getting {%s}\n", path);
+
+	if(path == NULL)
+		return thread_current()->working_dir;
+
 	struct dir* current_dir;
 	unsigned path_len = strlen(path);
 
@@ -364,7 +370,7 @@ dir_getdir(const char *path)
 	if(path[0] == '/')
 		current_dir = dir_open_root();
 	else
-		current_dir = dir_reopen(thread_current()->working_dir);
+		current_dir = thread_current()->working_dir; /* TODO reopen? */
 
 	/* create local copy of dir_path */
 	char* path_copy = malloc(path_len + 1);
@@ -406,29 +412,9 @@ dir_getdir(const char *path)
 
 /* Returns true iff "." and ".." are the only inhabitants of dir */
 bool
-dir_isempty (struct dir* dir, const char *name) {
-	struct dir_entry e;
-	struct inode *inode = NULL;
-	off_t ofs;
 
-	/* Find directory entry */
-	if (!lookup (dir, name, &e, &ofs)) {
-    	return false;
-	}
-
-	/* Open inode. */
-  	inode = inode_open(e.inode_sector);
-
-	char * temp = (char *)malloc(sizeof(char) * (NAME_MAX + 1) );
-    struct dir * dirtemp = dir_open(inode);
-
-	/* is dir empty? */
-    if (dir_readdir(dirtemp,temp)) {
-    	free(temp);
-        dir_close(dirtemp);
-		inode_close (inode);
-        return false;
-	}
-	else return true;
-
+dir_isempty (struct dir* dir) 
+{
+	/* inode is empty if there are only "." and ".." left */
+	return inode_length(dir->inode) == sizeof(struct dir_entry) * 2;
 }
