@@ -15,7 +15,7 @@
 #include "filesys/file.h"
 #include "filesys/cache.h"
 
-//#define FILESYSTEM 0
+//#define FILESYSTEM
 
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -129,20 +129,20 @@ thread_start (void)
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
 
-  /* Start preemptive thread scheduling. */
-  intr_enable ();
-
-  /* Wait for the idle thread to initialize idle_thread. */
-  sema_down (&idle_started);
-
 #ifdef FILESYSTEM
   /* create read ahead thread */
   thread_create ("read-ahead", PRI_DEFAULT, filesys_readahead_thread, (void *)NULL);
 
   /* create write behind thread */
   thread_create ("write-behind", PRI_DEFAULT, filesys_writebehind_thread, (void *)NULL);
-
 #endif
+
+  /* Start preemptive thread scheduling. */
+  intr_enable ();
+
+  /* Wait for the idle thread to initialize idle_thread. */
+  sema_down (&idle_started);
+
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -772,18 +772,20 @@ void filesys_readahead_thread (void * dummy UNUSED) {
 		/* wait until someone puts something on the list */
 		//sema_down(&readahead_cnt);                        
 
+		printf("read-ahead thread\n");
+
 		lock_acquire(&readahead_lock);
 
-		while(list_empty(&readahead_list))
-			cond_wait(&readahead_cond,&readahead_lock);
-
-			
+		cond_wait(&readahead_cond,&readahead_lock);
+	
 		/* read information and read block to cache */
 		struct readahead_elem * r = list_entry(list_pop_front (&readahead_list), struct readahead_elem, elem);
+
 		/* add it to cache */
 		cache_readahead (r->block_sector);
-		lock_release(&readahead_lock);
-		            
+
+		/* release lock and resources */
+		lock_release(&readahead_lock);            
 		free(r);
 		//if (DEBUG) printf("filesys read ahead\n");
 	}
@@ -792,13 +794,20 @@ void filesys_readahead_thread (void * dummy UNUSED) {
 
 void filesys_writebehind_thread(void * dummy UNUSED) {
 
-        uint64_t sleep = 1000;
+	/* one second */
+        uint64_t sleep_time = 1000;
 
-        while(true) {
-                timer_sleep(sleep);
-                /* save all cache blocks */
+        while(true) 
+	{
+		printf("writebehind thread\n");
+
+		/* sleep a second or two .. */
+                timer_sleep(sleep_time);
+                
+		/* save all cache blocks */
                 cache_flush();
-                //if (DEBUG) printf("filesys thread write back all cache entries\n");
+                
+		if (DEBUG) printf("filesys thread write back all cache entries\n");
         }
 }
 #endif
