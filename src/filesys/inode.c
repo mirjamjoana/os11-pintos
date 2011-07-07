@@ -8,9 +8,9 @@
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
 
-#define INODE_DEBUG 1
-#define FILE_DEBUG 1
-#define INODE_PRINT 1
+#define INODE_DEBUG 0
+#define FILE_DEBUG 0
+#define INODE_PRINT 0
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
