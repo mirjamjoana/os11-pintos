@@ -29,6 +29,7 @@ struct lock readahead_lock;
 
 /* counting semaphore for read-ahead list */
 struct semaphore readahead_cnt;
+struct condition readahead_cond;
 
 /* methods */
 void cache_init (void);

@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Tobias Orth <tobias.orth@gmx.net>
+Mirjam Neu-Weigand <mirjam.neuweigand@gmail.com>
 
 ---- PRELIMINARIES ----
 
@@ -90,6 +89,21 @@ to represent the file.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In inode.h:
+
+enum file_t {
+	FILE,
+	DIRECTORY
+};
+
+This is used to decide whether a given inode is a file or a directory.
+
+In thread.h:
+
+	struct dir *working_dir;			/* current working directory */
+
+Here we save the current working directory of the process.
+
 ---- ALGORITHMS ----
 
 >> B2: Describe your code for traversing a user-specified path.  How
@@ -106,6 +120,11 @@ to represent the file.
 >> is open by a process or if it is in use as a process's current
 >> working directory?  If so, what happens to that process's future
 >> file system operations?  If not, how do you prevent it?
+
+We do not allow an open directory to be removed, as well as we do not allow
+a process's current directory to be removed. 
+We prevent it by checking if the directory that is to be removed equals the
+process's current directory and whether the inode's open_cnt is 1.
 
 ---- RATIONALE ----
 
