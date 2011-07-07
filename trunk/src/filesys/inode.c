@@ -429,7 +429,7 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  lock_init(&inode->lock);
+  lock_init(&inode->lock);	
 
   return inode;
 }
@@ -587,7 +587,7 @@ inode_close (struct inode *inode)
 	/* Ignore null pointer. */
 	if (inode == NULL)
 		return;
-
+	
 	/* Release resources if this was the last opener. */
 	if (--inode->open_cnt == 0)
 	{

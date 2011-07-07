@@ -792,8 +792,9 @@ write (int fd, const void *buffer, unsigned size)
 			/* try to catch file with file descriptor fd */
 			struct file * f = syscall_get_file(fd);
 
-			/* if matching file descriptor has been found */
-			if(f != NULL)
+			/* if matching file descriptor has been found 
+			 * or file is a directory */
+			if(f != NULL && !isdir(fd))
 			{
 				/* write buffer to file */
 				writing_count += file_write(f, buffer, size);
@@ -993,35 +994,22 @@ syscall_get_file(int file_descriptor)
 /* Changes the current working directory of the process to dir, 
  which may be relative or absolute. Returns true if successful, false on failure. */
 bool
-chdir (const char *dir) {
+chdir (const char *dir) 
+{
+	/* search for dir */
+	struct dir *target = dir_getdir(dir);
 
-	/* TODO komplett falsch */
+	/* if dir exists, switch to it */
+	if(target != NULL)
+	{
+		dir_close(thread_current()->working_dir);
+		thread_current()->working_dir = target;
 
-    /* if empty or root return false */
-    if(strlen(dir) ==  0 || strcmp( dir, "/")) return false;
-
-    /* open file */
-    struct file * file  = filesys_open(dir);
-
-    if ( file == NULL ) {
-		file_close(file);
-        return false;
-    }
-    struct inode * my_inode = file_get_inode (file);
-
-    enum file_t type = inode_get_filetype (my_inode);
-
-    //if the file is a dir open it and set pwd to it
-    if(type == DIRECTORY) {
-        dir_close(thread_current()->working_dir);
-        thread_current()->working_dir = dir_open(inode_reopen(my_inode));
-		file_close(file);
 		return true;
 	}
-    else {
-		file_close(file);
-		return false;
-	}
+
+	/* if not, abort */
+	return false;
 }
 
 /* Creates the directory named dir, which may be relative or absolute. 
@@ -1051,21 +1039,23 @@ readdir (int fd, char *name)
 	syscall_check_pointer((const void *) name);
 	syscall_check_pointer((const void *) name + NAME_MAX + 1);
 
-	/* find the file and check if it corresponds to a directory */
+	/* get the file */
 	struct file *file = syscall_get_file(fd);
-	struct inode *my_inode = file_get_inode (file);
-    enum file_t type = inode_get_filetype (my_inode);
-
-	if (type == FILE) {
-		return false;
-	}
+	
+	//printf("SYSCALL: pos of dir: %u\n", file->pos);
 	
 	/* create local dir copy from file */
 	struct dir mydir;
 	mydir.inode = file->inode;
 	mydir.pos = file->pos;
 
-	return dir_readdir(&mydir, name);
+	bool success = dir_readdir(&mydir, name);
+	
+	/* increase file pointer */
+	if(success)
+		file->pos = mydir.pos;
+
+	return success;
 }
 
 /* Returns true if fd represents a directory, false if it represents an 
