@@ -15,13 +15,14 @@
 #include "filesys/file.h"
 #include "filesys/cache.h"
 
-//#define FILESYSTEM
+//#define FILESYSTEM 0
 
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
 
 #ifdef FILESYSTEM
+#include "devices/timer.h"
 void filesys_readahead_thread (void *);
 
 void filesys_writebehind_thread (void *);
@@ -139,7 +140,7 @@ thread_start (void)
   thread_create ("read-ahead", PRI_DEFAULT, filesys_readahead_thread, (void *)NULL);
 
   /* create write behind thread */
-  thread_create ("write-behind", PRI_DEFAULT, filesys_writebehind_ thread, (void *)NULL);
+  thread_create ("write-behind", PRI_DEFAULT, filesys_writebehind_thread, (void *)NULL);
 
 #endif
 }
@@ -773,7 +774,7 @@ void filesys_readahead_thread (void * dummy UNUSED) {
 
 		lock_acquire(&readahead_lock);
 
-		while(list_empty(readahead_list))
+		while(list_empty(&readahead_list))
 			cond_wait(&readahead_cond,&readahead_lock);
 
 			
