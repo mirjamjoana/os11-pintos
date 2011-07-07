@@ -7,7 +7,7 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 
-#define DIR_DEBUG 1
+#define DIR_DEBUG 0 
 
 static char* string_self = ".";
 static char* string_parent = "..";
@@ -285,7 +285,7 @@ dir_get_path_and_file (const char * dir_path, char** path, char** name)
 
 	size_t dir_path_len = strlen(dir_path);
 
-	if(DIR_DEBUG) printf("DIR: length of %s:%u \n", dir_path, dir_path_len);
+	//if(DIR_DEBUG) printf("DIR: length of %s:%u \n", dir_path, dir_path_len);
 	
 	/* create local copy of dir_path */
 	char* local_copy = malloc(dir_path_len + 1);

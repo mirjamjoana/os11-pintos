@@ -10,7 +10,7 @@
 #include "threads/malloc.h"
 #include "threads/thread.h" 
 
-#define DEBUG_FILESYS 1
+#define DEBUG_FILESYS 0
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -107,7 +107,7 @@ filesys_create (const char *name, off_t initial_size, enum file_t type)
 		
 		/* fetch parent */
 		if(path == NULL)
-			parent = thread_current()->working_dir;
+			parent = dir_reopen(thread_current()->working_dir);
 		else
 			parent = dir_getdir(path);
 
@@ -128,7 +128,7 @@ filesys_create (const char *name, off_t initial_size, enum file_t type)
 			else
 			{
 				/* create file */
-				ASSERT(inode_create(sector, parent_inode->sector, FILE));
+				ASSERT(inode_create(sector, initial_size, FILE));
 			}
 
 			/* save file/dir to parent dir */
