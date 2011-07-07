@@ -124,7 +124,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
 
 			/* internal offsets */
 			off_t doubly_indirect_offset = entry_cnt / INODE_INDIRECT_BLOCKS;
-			off_t indirect_offset = entry_cnt % INODE_DIRECT_BLOCKS;
+			off_t indirect_offset = entry_cnt % INODE_INDIRECT_BLOCKS;
 
 			/* fetch indirect block sector */
 			cache_read(id->doubly_indirect_block_sector, (void *) &block_sector,
@@ -134,7 +134,7 @@ byte_to_sector (const struct inode *inode, off_t pos)
 			cache_read(block_sector, (void *) &block_sector,
 					indirect_offset * sizeof(block_sector_t), sizeof(block_sector_t));
 			
-			//if(INODE_DEBUG) printf("INODE: offset %i in inode %u leads to doubly indirect block sector %u\n", pos, inode->sector, block_sector);
+			if(INODE_DEBUG) printf("INODE: offset %i in inode %u leads to doubly indirect block sector %u\n", pos, inode->sector, block_sector);
 
 		}
 		else
@@ -226,6 +226,8 @@ inode_add_block(struct inode* inode, block_sector_t block_sector)
 		/* offset in the indirect list */
 		off_t offset_indirect = entry_cnt % INODE_INDIRECT_BLOCKS;
 
+		//printf("INODE DIB: entries {%i} offset dib {%i} offset ib {%i}\n", entry_cnt, offset_doubly_indirect, offset_indirect);
+
 		/* create doubly indirect block if this is
 		 * the first element in the doubly indirect list */
 		if(entry_cnt == 0)
@@ -260,6 +262,8 @@ inode_add_block(struct inode* inode, block_sector_t block_sector)
 			/* save indirect block sector to doubly indirect block sector */
 			cache_write(id->doubly_indirect_block_sector, (void *) &indirect_block_sector,
 					offset_doubly_indirect * sizeof(block_sector_t), sizeof(block_sector_t));
+
+			//printf("added indirect block %u @ sector %u offset %i\n", indirect_block_sector, id->doubly_indirect_block_sector, offset_doubly_indirect * sizeof(block_sector_t));
 		}
 		
 		ASSERT(id->doubly_indirect_block_sector != 0);
@@ -269,11 +273,15 @@ inode_add_block(struct inode* inode, block_sector_t block_sector)
 		cache_read(id->doubly_indirect_block_sector, (void *) &indirect_block_sector,
 				offset_doubly_indirect * sizeof(block_sector_t), sizeof(block_sector_t));
 
+		//printf("INODE-IDS: %u\n", indirect_block_sector);
 		ASSERT(indirect_block_sector != 0);
+
 
 		/* add block sector number to indirect block sector */
 		cache_write(indirect_block_sector, (void *) &block_sector, 
 				offset_indirect * sizeof(block_sector_t), sizeof(block_sector_t));
+
+		//printf("done\n");
 
 		}
 	else
@@ -330,13 +338,7 @@ inode_extend (struct inode* inode, off_t ext_length)
 			break;
 		}
 	}
-
-	if(!success)
-	{
-		/* TODO cleanup allocated space? */
-		ASSERT(false);
-	}
-
+	
 	/* increment length and write back */
 	id->length += ext_length;
 	cache_write(inode->sector, (void *) &id->length, INODE_OFFSET_LENGTH, 4);
