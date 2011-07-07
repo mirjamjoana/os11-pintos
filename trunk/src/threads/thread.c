@@ -15,7 +15,7 @@
 #include "filesys/file.h"
 #include "filesys/cache.h"
 
-#define FILESYSTEM 0
+//#define FILESYSTEM
 
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -216,7 +216,7 @@ thread_create (const char *name, int priority,
 	t->parent = thread_current();
 
 	/* if child thread and not idle or read-ahead or main set working dir */
-	if(t != initial_thread && strcmp(name, "idle") != 00 && strcmp(name, "read_ahead") != 0)
+	if(t != initial_thread && strcmp(name, "idle") != 0 && strcmp(name, "read-ahead") != 0)
 	{
 		if(DEBUG) printf("THREAD: inherit working dir to child thread {%s}\n", name);
 		t->working_dir = dir_reopen(thread_current()->working_dir);
