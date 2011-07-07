@@ -759,11 +759,13 @@ void filesys_readahead_thread (void * dummy UNUSED) {
         sema_init(&readahead_cnt, 0);
 
         while(true) {
-                lock_acquire(&readahead_lock);
+                
                 /* wait until someone puts something on the list */
-                if (list_empty(&readahead_list))
+                while (list_empty(&readahead_list))
                         sema_down(&readahead_cnt);
 
+				lock_acquire(&readahead_lock);
+			
                 /* read information and read block to cache */
                 struct readahead_elem * r = list_entry(list_pop_front (&readahead_list), struct readahead_elem, elem);
                 /* add it to cache */
