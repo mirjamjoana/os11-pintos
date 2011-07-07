@@ -29,6 +29,30 @@ Mirjam Neu-Weigand <mirjam.neuweigand@gmail.com>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In inode.c:
+
+struct inode_disk
+{
+    enum file_t type;						/* File or Directory. */
+    off_t length;         					/* Size in bytes. */
+    unsigned sector_count;					/* Count of disk block sectors in use. */
+    unsigned magic;                     			/* Magic number. */
+    block_sector_t direct_block_sectors[INODE_DIRECT_BLOCKS];	/* Direct block sectors. */
+    block_sector_t indirect_block_sector;			/* Indirect block sector. */
+    block_sector_t doubly_indirect_block_sector; 		/* Doubly indirect block sector. */
+};
+
+This represents an inode on disk. There are different variables for 
+representing whether it is a file or a directory, the length of the
+inode, the number of disk blocks that are in use and direct, indirect
+and doubly indirect block sectors.
+
+#define INODE_DIRECT_BLOCKS 122
+#define INODE_INDIRECT_BLOCKS 128
+#define INODE_DOUBLY_DIRECT_BLOCKS 128 * 128 /* => max: ~8Mb */
+
+The number of direct, indirect and doubly indirect blocks on disk.
+
 >> A2: What is the maximum size of a file supported by your inode
 >> structure?  Show your work.
 
@@ -44,7 +68,7 @@ amounts to about 8.12 Mb of space for one file.
 
 Each inode has its own single global lock. Only one can succeed while 
 trying to extend the file at a time.
-
+I use a reader and writer int variable in the cache blocks so no one gets blocked. Every thread that wants to write or read just increases the variable before it does and decreases afterwards. This prevents eviction of the block and allows multiple reads and writes at the same time. The only time I block someone is when two files want to write at EOF. 
 >> A4: Suppose processes A and B both have file F open, both
 >> positioned at end-of-file.  If A reads and B writes F at the same
 >> time, A may read all, part, or none of what B writes.  However, A
@@ -64,6 +88,13 @@ has already been written and nothing more.
 >> prevent forever another process from writing the file, and many
 >> processes writing to a file cannot prevent another process forever
 >> from reading the file.
+
+The variables reader and writer in struct cache_block are used to count
+the number of threads reading and threads writing. If a thread wants to
+read or write, it just increases the corresponding variable. So there is
+no possibility that a thread blocks another. But if two threads want to
+write at EOF they get blocked by the OS.
+
 
 ---- RATIONALE ----
 
@@ -100,7 +131,7 @@ This is used to decide whether a given inode is a file or a directory.
 
 In thread.h:
 
-	struct dir *working_dir;			/* current working directory */
+	struct dir *working_dir;	/* current working directory */
 
 Here we save the current working directory of the process.
 
@@ -109,12 +140,22 @@ Here we save the current working directory of the process.
 >> B2: Describe your code for traversing a user-specified path.  How
 >> do traversals of absolute and relative paths differ?
 
+For traversing the path we use dir_getdir, which first checks whether a 
+given path is relative or absolute, by checking if the first char equals "/". 
+If the path is relative, we use the working directory of our thread to make 
+it absolute, otherwise we use the root as starting point. Then we traverse
+the string with strtok_r, as long as we get new directory names.
+
+
 ---- SYNCHRONIZATION ----
 
 >> B4: How do you prevent races on directory entries?  For example,
 >> only one of two simultaneous attempts to remove a single file
 >> should succeed, as should only one of two simultaneous attempts to
 >> create a file with the same name, and so on.
+
+We equipped the inode with a lock to protect operations like dir_add, 
+dir_remove and dir_lookup, so only one thread at a time can enter them.
 
 >> B5: Does your implementation allow a directory to be removed if it
 >> is open by a process or if it is in use as a process's current
@@ -131,6 +172,9 @@ process's current directory and whether the inode's open_cnt is 1.
 >> B6: Explain why you chose to represent the current directory of a
 >> process the way you did.
 
+We save the struct dir of the working directory of the thread, which helps us
+to interpret relative paths correctly when a user opens a file or directory. 
+
 			     BUFFER CACHE
 			     ============
 
@@ -140,14 +184,96 @@ process's current directory and whether the inode's open_cnt is 1.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In cache.c:
+
+struct cache_block
+{
+	/* block id on disk */
+	block_sector_t bid;
+
+	/* corresponding kernel page */
+	void * kpage;
+
+	/* fields to check access and if someone wrote to the page */
+	bool dirty;
+	bool accessed;
+	int reader;
+	int writer;
+};
+
+A cache block is an entry of the cache table and is equipped with different
+variables that allow to identify it (via the block id bid), to get its 
+corresponding kernel page, dirty and accessed variables for the eviction 
+policy and writing purposes, and reader and writer counting variables.
+
+/* how many blocks fit in one page */
+int blocks_per_page = (PGSIZE/BLOCK_SECTOR_SIZE);
+
+This represents the number of blocks that fit in one page.
+
+/* the cache */
+struct cache_block *cache[CACHE_SIZE];
+
+This is the actual cache.
+
+/* bitmap of free cache blocks */
+struct bitmap *cache_table;
+
+This bitmap is used to identify free cache blocks.
+
+/* global cache lock */
+struct lock cache_globallock;
+
+This lock protects the cache table.
+
+In cache.h:
+
+/* read-ahead data structures */
+struct readahead_elem
+{
+	struct list_elem elem; /* list element */
+	block_sector_t block_sector;	/* block sector */
+
+};
+
+This represents an element of the read-ahead list.
+
+/* global list of read-ahead blocks */
+struct list readahead_list;
+struct lock readahead_lock;
+
+The list is protected by the readahead_lock. Both are used by the
+read-ahead thread.
+
+/* condition for read-ahead list */
+struct condition readahead_cond; 
+
+This is used to wake up the read-ahead thread in case there is something
+to be read.
+
+
 ---- ALGORITHMS ----
 
 >> C2: Describe how your cache replacement algorithm chooses a cache
 >> block to evict.
 
+We implemented the second chance algorithm to choose the next block
+that gets evicted. Only blocks where the reader and writer counts are
+zero, are possible candidates. It the block's accessed variable is true
+we set it to false and go on. Otherwise if we find a block where accessed
+is false, we evict it. 
+
 >> C3: Describe your implementation of write-behind.
 
+We installed another kernel thread, which is supposed to wake up regularly and
+then to call cache_flush(), which writes back all dirty cache blocks.
+
 >> C4: Describe your implementation of read-ahead.
+
+This functionality should be provided by a thread that waits for a condition
+until another thread reads a block and signals the read-ahead thread. Then the
+read-ahead thread should get the block he is supposed to read from the readahead_list.
+Unfortunately we did not manage to get this running. 
 
 ---- SYNCHRONIZATION ----
 
@@ -155,13 +281,26 @@ process's current directory and whether the inode's open_cnt is 1.
 >> buffer cache block, how are other processes prevented from evicting
 >> that block?
 
+That is assured via the reader/writer counters. They count the number of threads
+that are reading or writing a block at that moment. A block can only get
+evicted if both are 0.
+
 >> C6: During the eviction of a block from the cache, how are other
 >> processes prevented from attempting to access the block?
+
+The global cache lock cache_globallock must be held by the thread that 
+called cache_evict().
 
 ---- RATIONALE ----
 
 >> C7: Describe a file workload likely to benefit from buffer caching,
 >> and workloads likely to benefit from read-ahead and write-behind.
+
+Buffer caching is especially useful when processes access a small part of
+a file frequently. Then there is no need to load it from disk every time
+and to write it back again (write-behind).
+Read-ahead is useful if a process does not read the whole file and also
+if it mostly reads from block n to block n+1. 
 
 			   SURVEY QUESTIONS
 			   ================
