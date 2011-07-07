@@ -19,19 +19,22 @@ dir_create (block_sector_t sector, block_sector_t parent)
 {
 	if(DIR_DEBUG) printf("DIR: creating dir @ sector %u with NO entries\n", sector /*, entry_cnt*/);
 	bool success = true;
-	struct dir new_dir;
+	struct dir *new_dir = malloc(sizeof(struct dir));
 
 	/* create empty directory */
 	success &= inode_create (sector, 0, DIRECTORY);
 
 	/* open dirs inode */
-	new_dir.inode = inode_open(sector);
-	new_dir.pos = 0;
+	new_dir->inode = inode_open(sector);
+	new_dir->pos = 0;
 
 	/* add "." and ".." to dir */
-	success &= dir_add(&new_dir, string_self, sector);
-	success &= dir_add(&new_dir, string_parent, parent);
+	success &= dir_add(new_dir, string_self, sector);
+	success &= dir_add(new_dir, string_parent, parent);
 
+	/* close dir */
+	dir_close(new_dir);
+	
 	return success;
 }
 
@@ -249,6 +252,9 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 	if(DIR_DEBUG) printf("DIR: reading dir\n");
   struct dir_entry e;
 
+  if(dir->pos < (off_t) sizeof(struct dir_entry) * 2)
+	  dir->pos = (off_t) sizeof(struct dir_entry) * 2;
+
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
       dir->pos += sizeof e;
@@ -315,6 +321,9 @@ dir_get_path_and_file (const char * dir_path, char** path, char** name)
 	{
 		*name = local_copy;
 
+		*path = malloc(1);
+		(*path)[0] = 0x0;
+
 		if(DIR_DEBUG) printf("DIR: 1 split up path in name and path - path : NULL, name : {%s}\n", *name);
 
 		return true;
@@ -374,7 +383,7 @@ dir_getdir(const char *path)
 
 	/* create local copy of dir_path */
 	char* path_copy = malloc(path_len + 1);
-	strlcpy(path_copy, path, path_len);
+	strlcpy(path_copy, path, path_len + 1);
 
 	/* traverse directory tree */
 
@@ -390,9 +399,12 @@ dir_getdir(const char *path)
 		/* found next directory */
 		if(dir_lookup(current_dir, next, &next_inode))
 		{
-			/* switch to next directory */
-			current_dir = dir_open(next_inode);
+			/* save next directory */
+			struct dir *tmp_dir = dir_open(next_inode);
+			
+			/* close old dir and switch to new */
 			dir_close(current_dir);
+			current_dir = tmp_dir;
 		}
 		/* directory not found -> abort */
 		else
@@ -404,7 +416,7 @@ dir_getdir(const char *path)
 		}
 	}
 
-	if(DIR_DEBUG) printf("DIR: traversed directory: success.\n");
+	if(DIR_DEBUG) printf("DIR: traversed directory: success. result: dir @ sector {%u}\n", current_dir->inode->sector);
 
 	/* return last directory */
 	return current_dir;
@@ -412,9 +424,26 @@ dir_getdir(const char *path)
 
 /* Returns true iff "." and ".." are the only inhabitants of dir */
 bool
-
 dir_isempty (struct dir* dir) 
 {
+	/* save dir pos */
+	off_t saved_pos = dir->pos;
+
+	/* temp space for name */
+	char *temp_name = malloc(NAME_MAX + 1);
+
+	/* set pos to 0 and read */
+	dir->pos = 0;
+	bool empty = !dir_readdir(dir, temp_name);
+
+	/* reset pos */
+	dir->pos = saved_pos;
+
+	/* free resources */
+	free(temp_name);
+
+	if(DIR_DEBUG) printf("DIR: is empty? {%u} : %s\n", dir->inode->sector, empty ? "yes" : "no");
+
 	/* inode is empty if there are only "." and ".." left */
-	return inode_length(dir->inode) == sizeof(struct dir_entry) * 2;
+	return empty;
 }
