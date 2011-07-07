@@ -68,7 +68,13 @@ amounts to about 8.12 Mb of space for one file.
 
 Each inode has its own single global lock. Only one can succeed while 
 trying to extend the file at a time.
-I use a reader and writer int variable in the cache blocks so no one gets blocked. Every thread that wants to write or read just increases the variable before it does and decreases afterwards. This prevents eviction of the block and allows multiple reads and writes at the same time. The only time I block someone is when two files want to write at EOF. 
+We use a reader and writer variable in the cache blocks so no one gets 
+blocked. Every thread that wants to write or read just increases the 
+variable before it does and decreases afterwards. This prevents 
+eviction of the block and allows multiple reads and writes at the same 
+time. The only time I block someone is when two files want to write at 
+EOF.
+ 
 >> A4: Suppose processes A and B both have file F open, both
 >> positioned at end-of-file.  If A reads and B writes F at the same
 >> time, A may read all, part, or none of what B writes.  However, A
@@ -93,7 +99,7 @@ The variables reader and writer in struct cache_block are used to count
 the number of threads reading and threads writing. If a thread wants to
 read or write, it just increases the corresponding variable. So there is
 no possibility that a thread blocks another. But if two threads want to
-write at EOF they get blocked by the OS.
+write at EOF only one can continue as we stated before.
 
 
 ---- RATIONALE ----
@@ -154,8 +160,8 @@ the string with strtok_r, as long as we get new directory names.
 >> should succeed, as should only one of two simultaneous attempts to
 >> create a file with the same name, and so on.
 
-We equipped the inode with a lock to protect operations like dir_add, 
-dir_remove and dir_lookup, so only one thread at a time can enter them.
+We equipped the inode with a lock to protect operations like dir_add and 
+dir_remove, so only one thread at a time can enter them.
 
 >> B5: Does your implementation allow a directory to be removed if it
 >> is open by a process or if it is in use as a process's current
@@ -261,7 +267,7 @@ We implemented the second chance algorithm to choose the next block
 that gets evicted. Only blocks where the reader and writer counts are
 zero, are possible candidates. It the block's accessed variable is true
 we set it to false and go on. Otherwise if we find a block where accessed
-is false, we evict it. 
+is false, we write it back if necessary and evict it. 
 
 >> C3: Describe your implementation of write-behind.
 
@@ -273,7 +279,8 @@ then to call cache_flush(), which writes back all dirty cache blocks.
 This functionality should be provided by a thread that waits for a condition
 until another thread reads a block and signals the read-ahead thread. Then the
 read-ahead thread should get the block he is supposed to read from the readahead_list.
-Unfortunately we did not manage to get this running. 
+Unfortunately we did not manage to get this running properly. The function itself
+should run without problems but the thread is getting stuck in its execution.
 
 ---- SYNCHRONIZATION ----
 

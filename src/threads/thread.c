@@ -772,8 +772,6 @@ void filesys_readahead_thread (void * dummy UNUSED) {
 		/* wait until someone puts something on the list */
 		//sema_down(&readahead_cnt);                        
 
-		printf("read-ahead thread\n");
-
 		lock_acquire(&readahead_lock);
 
 		cond_wait(&readahead_cond,&readahead_lock);
@@ -799,7 +797,6 @@ void filesys_writebehind_thread(void * dummy UNUSED) {
 
         while(true) 
 	{
-		printf("writebehind thread\n");
 
 		/* sleep a second or two .. */
                 timer_sleep(sleep_time);
