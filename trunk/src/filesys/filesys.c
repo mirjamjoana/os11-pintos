@@ -160,9 +160,9 @@ filesys_open (const char *name)
 	return filesys_get_file(name);
 }
 
-/* Deletes the file named NAME.
+/* Deletes the file or directory named NAME.
    Returns true if successful, false on failure.
-   Fails if no file named NAME exists,
+   Fails if no file/directory named NAME exists,
    or if an internal memory allocation fails. */
 bool
 filesys_remove (const char *name) 
@@ -173,6 +173,8 @@ filesys_remove (const char *name)
 	struct file *file = filesys_open(name);
 	struct inode * my_inode = file_get_inode(file);
 	enum file_t type = inode_get_filetype(my_inode);
+	struct dir_entry e;
+	off_t ofs;
 
 	if (type == DIRECTORY) {
 		/* check and fetch path and file name */
@@ -202,9 +204,20 @@ filesys_remove (const char *name)
 			}
 			/* is it still opened? */
 			if (my_inode->open_cnt > 1) return false;
-			else /* TODO loeschen */ return true;
+			else {
+				/* Erase directory entry. */
+				e.in_use = false;
+				if (inode_write_at (my_inode, &e, sizeof e, ofs) != sizeof e) {
+					inode_close(my_inode);
+    				return false;
+				}
+				/* Remove inode. */
+				inode_remove (my_inode);
+				return true;
+			}
 		}
 	}
+	/* type is FILE */
 	else {
 		/* TODO alter Code */
 		struct dir *dir = dir_open_root ();
