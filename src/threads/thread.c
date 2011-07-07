@@ -23,6 +23,8 @@
 
 #ifdef FILESYSTEM
 void filesys_readahead_thread (void *);
+
+void filesys_writebehind_thread (void *);
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -133,8 +135,12 @@ thread_start (void)
   sema_down (&idle_started);
 
 #ifdef FILESYSTEM
-  //create the read ahead thread
+  /* create read ahead thread */
   thread_create ("read-ahead", PRI_DEFAULT, filesys_readahead_thread, (void *)NULL);
+
+  /* create write behind thread */
+  thread_create ("write-behind", PRI_DEFAULT, filesys_writebehind_ thread, (void *)NULL);
+
 #endif
 }
 
@@ -753,29 +759,46 @@ struct child* thread_get_child(struct thread * parent, tid_t child_tid) {
 #ifdef FILESYSTEM
 void filesys_readahead_thread (void * dummy UNUSED) {
 
-        /* initialize variables */
-        lock_init(&readahead_lock);
-        list_init(&readahead_list);
-        sema_init(&readahead_cnt, 0);
+	/* initialize variables */
+	lock_init(&readahead_lock);
+	list_init(&readahead_list);
+	//sema_init(&readahead_cnt, 0);
+	cond_init(&readahead_cond);
+
+	
+	while(true) {
+                
+		/* wait until someone puts something on the list */
+		//sema_down(&readahead_cnt);                        
+
+		lock_acquire(&readahead_lock);
+
+		while(list_empty(readahead_list))
+			cond_wait(&readahead_cond,&readahead_lock);
+
+			
+		/* read information and read block to cache */
+		struct readahead_elem * r = list_entry(list_pop_front (&readahead_list), struct readahead_elem, elem);
+		/* add it to cache */
+		cache_readahead (r->block_sector);
+		lock_release(&readahead_lock);
+		            
+		free(r);
+		//if (DEBUG) printf("filesys read ahead\n");
+	}
+
+}
+
+void filesys_writebehind_thread(void * dummy UNUSED) {
+
+        uint64_t sleep = 1000;
 
         while(true) {
-                
-                /* wait until someone puts something on the list */
-                while (list_empty(&readahead_list))
-                        sema_down(&readahead_cnt);
-
-				lock_acquire(&readahead_lock);
-			
-                /* read information and read block to cache */
-                struct readahead_elem * r = list_entry(list_pop_front (&readahead_list), struct readahead_elem, elem);
-                /* add it to cache */
-                cache_readahead (r->block_sector);
-                lock_release(&readahead_lock);
-                
-                free(r);
-                //if (debug) printf("filesys read ahead\n");
+                timer_sleep(sleep);
+                /* save all cache blocks */
+                cache_flush();
+                //if (DEBUG) printf("filesys thread write back all cache entries\n");
         }
-
 }
 #endif
 
