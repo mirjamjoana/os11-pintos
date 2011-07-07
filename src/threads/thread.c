@@ -132,7 +132,7 @@ thread_start (void)
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down (&idle_started);
 
-#ifdef FILESYSTEm
+#ifdef FILESYSTEM
   //create the read ahead thread
   thread_create ("filesys_rah", PRI_DEFAULT, filesys_readahead_thread, (void *)NULL);
 #endif
