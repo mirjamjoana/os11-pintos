@@ -17,7 +17,7 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 
-#define GLOBAL_LOCKS 1
+#define GLOBAL_LOCKS 1 
 
 #define CONSOLE_BUFFER_SIZE 100
 #define MAX_OPEN_FILES 128
