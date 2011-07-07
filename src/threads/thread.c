@@ -134,7 +134,7 @@ thread_start (void)
 
 #ifdef FILESYSTEM
   //create the read ahead thread
-  thread_create ("filesys_rah", PRI_DEFAULT, filesys_readahead_thread, (void *)NULL);
+  thread_create ("read-ahead", PRI_DEFAULT, filesys_readahead_thread, (void *)NULL);
 #endif
 }
 
@@ -215,8 +215,8 @@ thread_create (const char *name, int priority,
 	t->exit_status = -1;
 	t->parent = thread_current();
 
-	/* if child thread and not idle or main set working dir */
-	if(t != initial_thread && strcmp(name, "idle") != 0)
+	/* if child thread and not idle or read-ahead or main set working dir */
+	if(t != initial_thread && strcmp(name, "idle") != 00 && strcmp(name, "read_ahead") != 0)
 	{
 		if(DEBUG) printf("THREAD: inherit working dir to child thread {%s}\n", name);
 		t->working_dir = dir_reopen(thread_current()->working_dir);
