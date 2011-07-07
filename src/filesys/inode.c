@@ -258,10 +258,10 @@ inode_add_block(struct inode* inode, block_sector_t block_sector)
 			cache_write(indirect_block_sector, zero, 0, BLOCK_SECTOR_SIZE);
 
 			/* save indirect block sector to doubly indirect block sector */
-			cache_write(id->doubly_indirect_block_sector, (void *) indirect_block_sector,
+			cache_write(id->doubly_indirect_block_sector, (void *) &indirect_block_sector,
 					offset_doubly_indirect * sizeof(block_sector_t), sizeof(block_sector_t));
 		}
-
+		
 		ASSERT(id->doubly_indirect_block_sector != 0);
 
 		/* fetch indirect block sector number */
@@ -272,8 +272,10 @@ inode_add_block(struct inode* inode, block_sector_t block_sector)
 		ASSERT(indirect_block_sector != 0);
 
 		/* add block sector number to indirect block sector */
-		cache_write(indirect_block_sector, (void *) &block_sector, offset_indirect, sizeof(block_sector_t));
-	}
+		cache_write(indirect_block_sector, (void *) &block_sector, 
+				offset_indirect * sizeof(block_sector_t), sizeof(block_sector_t));
+
+		}
 	else
 	{
 		/* something went horribly wrong. */
